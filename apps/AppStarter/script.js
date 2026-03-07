@@ -368,7 +368,8 @@ function RequestHandler(AppName, CallBody) {
 
 // ─── Open a launcher window ───────────────────────────────────────────────────
 async function openLauncherWindow() {
-    const winResult = await Registry.responsibility_call("DomHandler", "AppStarter", {
+    const AppName = "AppStarter";
+    const winResult = await Registry.responsibility_call("DomHandler", AppName, {
         type: "division_create",
         options: { title: "App Starter", icon: "⬡", width: 540, height: 400 }
     });
@@ -387,11 +388,26 @@ async function openLauncherWindow() {
     Registry.responsibility_on_available("Database", async () => {
         renderLauncher(DomElement, ShadowRoot, WindowId);
     });
+
+    // ── Self-terminate when the window is closed ──────────────────────────────
+    // Watch for the shadow host being removed from the DOM.
+    const observer = new MutationObserver(() => {
+        
+        if (!document.contains(ShadowRoot.host)) {
+            console.log("doesnt contain")
+            observer.disconnect();
+            
+            Registry.app_terminate(AppName);
+        }
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
 }
 
 // ─── App entry point ──────────────────────────────────────────────────────────
 export default async function AppBody() {
-    Registry.responsibility_create("AppStarter", "AppStarter", RequestHandler);
+    const AppName = "AppStarter";
+    console.log(`[${AppName}] Starting up…`);
+    Registry.responsibility_create(AppName, AppName, RequestHandler);
     // Wait for DomHandler to be available before opening the launcher window
     Registry.responsibility_on_available("DomHandler", () => {
         openLauncherWindow();

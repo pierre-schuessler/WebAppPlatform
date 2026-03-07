@@ -2,7 +2,5 @@
   { "name": "DomHandler",  "src": "./apps/DomHandler/script.js"   },
   { "name": "Firebase",    "src": "./apps/Firebase/script.js"     },
   { "name": "AppStarter",  "src": "./apps/AppStarter/script.js"   },
-  { "name": "DbUserFractioning", "src":"./apps/DbUserFractioning/script.js"},
-  { "name": "ProjectManager", "src":"./apps/ProjectManager/script.js"},
-  { "name": "Slides", "src":"./apps/Slides/script.js"}
+  { "name": "DbUserFractioning", "src":"./apps/DbUserFractioning/script.js"}
 ]

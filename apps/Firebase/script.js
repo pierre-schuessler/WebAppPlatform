@@ -62,6 +62,16 @@ signInWithPopup(auth, provider)
   .then((result) => {
     const user = result.user;
     console.log("[DEBUG] User signed in:", user);
+
+    // ── Write email → UID index so other users can look up this account ──────
+    // Email is encoded: dots → commas, so Firebase key rules are satisfied.
+    if (user.email) {
+      const encodedEmail = user.email.replace(/\./g, ",");
+      set(ref(db, `WebAppPlatform/user_index/${encodedEmail}`), user.uid)
+        .then(() => console.log("[Firebase] Email index written for", user.email))
+        .catch(e => console.warn("[Firebase] Email index write failed:", e));
+    }
+
     openAuthViewerWindow();
   })
   .catch((error) => {
@@ -474,7 +484,7 @@ async function openAuthViewerWindow() {
     "Firebase",
     {
       type: "division_create",
-      options: { title: "User Profile", icon: "👤", width: 380, height: 320 },
+      options: { title: "User Profile", icon: "👤", width: 380, height: 370 },
     },
   );
   if (winResult.type !== "success") {
@@ -522,7 +532,7 @@ async function openAuthViewerWindow() {
     }
     .avatar-ring {
       position: absolute; inset: -5px; border-radius: 50%;
-      border: 1.5px solid rgba(251,146,60,0.2);
+      border: 2.5px solid rgba(251,146,60,0.2);
       animation: spin 8s linear infinite;
       border-top-color: rgba(251,146,60,0.6);
     }
@@ -566,7 +576,7 @@ async function openAuthViewerWindow() {
     </div>
     <div class="profile-card">
       <div class="avatar-wrap">
-        <img class="avatar" src="${photoURL}" alt="${user.displayName}" onerror="this.src=''" />
+        <img class="avatar" src="${photoURL}" alt="${user.displayName}" onerror="this.src='https://upload.wikimedia.org/wikipedia/commons/a/ac/Default_pfp.jpg'" />
         <div class="avatar-ring"></div>
       </div>
       <div class="info">
@@ -599,11 +609,9 @@ async function openAuthViewerWindow() {
 async function AuthRequestHandler(callerApp, CallBody) {
   let { type, data } = CallBody;
 
-    if (!type) {
+  if (!type) {
     return { type: "error", status: "No type given." };
   }
-
-  
 
   switch (type) {
     case "get_current_user": {

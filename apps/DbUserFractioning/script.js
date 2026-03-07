@@ -353,5 +353,7 @@ export default async function AppBody() {
     FracRequestHandler
   );
   console.log("[DbUserFractioning] Responsibility registered.");
-  await openViewerWindow();
+  Registry.responsibility_on_available("DomHandler", async () => {
+    await openViewerWindow();
+  });
 }

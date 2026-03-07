@@ -28,18 +28,27 @@ export const SlideTypeRegistry = new Map();
 function attachBlurSave(el, getValue, setValue, slideObject, onChange) {
   if (!el) return;
   let oldValue = "";
-  el.addEventListener("focus", () => { oldValue = getValue(); });
+  el.addEventListener("focus", () => {
+    oldValue = getValue();
+  });
   el.addEventListener("blur", () => {
     const current = getValue();
-    if (current !== oldValue) { setValue(current); onChange(slideObject, { rerender: false }); }
+    if (current !== oldValue) {
+      setValue(current);
+      onChange(slideObject, { rerender: false });
+    }
   });
 }
 
 // ── general ──────────────────────────────────────────────────────────────────
 SlideTypeRegistry.set("general", {
   defaultData: () => "",
-  deserialize(raw) { return { data: raw.data || "" }; },
-  serialize(s)     { return { data: s.data }; },
+  deserialize(raw) {
+    return { data: raw.data || "" };
+  },
+  serialize(s) {
+    return { data: s.data };
+  },
 
   mount(el, slide, onChange, utils) {
     const { restoreContentWithBreaks, extractContentWithBreaks } = utils;
@@ -47,21 +56,42 @@ SlideTypeRegistry.set("general", {
     const footerEl = el.querySelector(".slide-footer");
     headerEl.contentEditable = "true";
     footerEl.contentEditable = "true";
-    headerEl.innerHTML = restoreContentWithBreaks(slide.title  || "");
+    headerEl.innerHTML = restoreContentWithBreaks(slide.title || "");
     footerEl.innerHTML = restoreContentWithBreaks(slide.footer || "");
-    attachBlurSave(headerEl, () => extractContentWithBreaks(headerEl), v => (slide.title  = v), slide, onChange);
-    attachBlurSave(footerEl, () => extractContentWithBreaks(footerEl), v => (slide.footer = v), slide, onChange);
+    attachBlurSave(
+      headerEl,
+      () => extractContentWithBreaks(headerEl),
+      (v) => (slide.title = v),
+      slide,
+      onChange,
+    );
+    attachBlurSave(
+      footerEl,
+      () => extractContentWithBreaks(footerEl),
+      (v) => (slide.footer = v),
+      slide,
+      onChange,
+    );
   },
 });
 
 // ── title ─────────────────────────────────────────────────────────────────────
 SlideTypeRegistry.set("title", {
   defaultData: () => "",
-  deserialize(raw) { return { data: raw.description || "" }; },
-  serialize(s)     { return { description: s.data }; },
+  deserialize(raw) {
+    return { data: raw.description || "" };
+  },
+  serialize(s) {
+    return { description: s.data };
+  },
 
   mount(el, slide, onChange, utils, activeProjectHash) {
-    const { restoreContentWithBreaks, extractContentWithBreaks, colorFromIndex, fadeHslTowardWhite } = utils;
+    const {
+      restoreContentWithBreaks,
+      extractContentWithBreaks,
+      colorFromIndex,
+      fadeHslTowardWhite,
+    } = utils;
     SlideTypeRegistry.get("general").mount(el, slide, onChange, utils);
 
     function depthFromPath(path) {
@@ -70,21 +100,31 @@ SlideTypeRegistry.set("title", {
     }
 
     el.style.backgroundColor = fadeHslTowardWhite(
-      colorFromIndex((slide.depth || 0) + depthFromPath(activeProjectHash))
+      colorFromIndex((slide.depth || 0) + depthFromPath(activeProjectHash)),
     );
 
     const bodyEl = el.querySelector(".slide-body");
     bodyEl.contentEditable = "true";
     bodyEl.innerHTML = restoreContentWithBreaks(slide.data || "");
-    attachBlurSave(bodyEl, () => extractContentWithBreaks(bodyEl), v => (slide.data = v), slide, onChange);
+    attachBlurSave(
+      bodyEl,
+      () => extractContentWithBreaks(bodyEl),
+      (v) => (slide.data = v),
+      slide,
+      onChange,
+    );
   },
 });
 
 // ── text ──────────────────────────────────────────────────────────────────────
 SlideTypeRegistry.set("text", {
   defaultData: () => "",
-  deserialize(raw) { return { data: raw.data || "" }; },
-  serialize(s)     { return { data: s.data }; },
+  deserialize(raw) {
+    return { data: raw.data || "" };
+  },
+  serialize(s) {
+    return { data: s.data };
+  },
 
   mount(el, slide, onChange, utils) {
     const { restoreContentWithBreaks, extractContentWithBreaks } = utils;
@@ -92,15 +132,27 @@ SlideTypeRegistry.set("text", {
     const bodyEl = el.querySelector(".slide-body");
     bodyEl.contentEditable = "true";
     bodyEl.innerHTML = restoreContentWithBreaks(slide.data || "");
-    attachBlurSave(bodyEl, () => extractContentWithBreaks(bodyEl), v => (slide.data = v), slide, onChange);
+    attachBlurSave(
+      bodyEl,
+      () => extractContentWithBreaks(bodyEl),
+      (v) => (slide.data = v),
+      slide,
+      onChange,
+    );
   },
 });
 
 // ── columns ───────────────────────────────────────────────────────────────────
 SlideTypeRegistry.set("columns", {
   defaultData: () => ({ left: "", right: "" }),
-  deserialize(raw) { return { data: { left: raw.data?.left || "", right: raw.data?.right || "" } }; },
-  serialize(s)     { return { data: s.data }; },
+  deserialize(raw) {
+    return {
+      data: { left: raw.data?.left || "", right: raw.data?.right || "" },
+    };
+  },
+  serialize(s) {
+    return { data: s.data };
+  },
 
   mount(el, slide, onChange, utils) {
     const { restoreContentWithBreaks, extractContentWithBreaks } = utils;
@@ -108,19 +160,35 @@ SlideTypeRegistry.set("columns", {
     const bodyEl = el.querySelector(".slide-body");
     bodyEl.style.cssText = "display:flex;flex-direction:row;width:100%";
     bodyEl.innerHTML = `
-      <div class="col-left"  contenteditable="true" style="width:50%;height:100%;box-sizing:border-box;">${restoreContentWithBreaks(slide.data.left  || "")}</div>
+      <div class="col-left"  contenteditable="true" style="width:50%;height:100%;box-sizing:border-box;">${restoreContentWithBreaks(slide.data.left || "")}</div>
       <div class="col-right" contenteditable="true" style="width:50%;height:100%;box-sizing:border-box;">${restoreContentWithBreaks(slide.data.right || "")}</div>
     `;
-    attachBlurSave(bodyEl.querySelector(".col-left"),  () => extractContentWithBreaks(bodyEl.querySelector(".col-left")),  v => (slide.data.left  = v), slide, onChange);
-    attachBlurSave(bodyEl.querySelector(".col-right"), () => extractContentWithBreaks(bodyEl.querySelector(".col-right")), v => (slide.data.right = v), slide, onChange);
+    attachBlurSave(
+      bodyEl.querySelector(".col-left"),
+      () => extractContentWithBreaks(bodyEl.querySelector(".col-left")),
+      (v) => (slide.data.left = v),
+      slide,
+      onChange,
+    );
+    attachBlurSave(
+      bodyEl.querySelector(".col-right"),
+      () => extractContentWithBreaks(bodyEl.querySelector(".col-right")),
+      (v) => (slide.data.right = v),
+      slide,
+      onChange,
+    );
   },
 });
 
 // ── math ──────────────────────────────────────────────────────────────────────
 SlideTypeRegistry.set("math", {
   defaultData: () => "",
-  deserialize(raw) { return { data: raw.data || "" }; },
-  serialize(s)     { return { data: s.data }; },
+  deserialize(raw) {
+    return { data: raw.data || "" };
+  },
+  serialize(s) {
+    return { data: s.data };
+  },
 
   mount(el, slide, onChange, utils) {
     SlideTypeRegistry.get("general").mount(el, slide, onChange, utils);
@@ -130,20 +198,35 @@ SlideTypeRegistry.set("math", {
       bodyEl.innerHTML = `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;padding:1rem;"><span class="mq-field"></span></div>`;
       const mq = MQ.MathField(bodyEl.querySelector(".mq-field"), {
         spaceBehavesLikeTab: true,
-        handlers: { edit(f) { slide.data = f.latex(); onChange(slide, { rerender: false }); } },
+        handlers: {
+          edit(f) {
+            slide.data = f.latex();
+            onChange(slide, { rerender: false });
+          },
+        },
       });
       if (slide.data) mq.latex(slide.data);
     };
     const loadMQ = () => {
       const s = document.createElement("script");
-      s.src = "https://cdnjs.cloudflare.com/ajax/libs/mathquill/0.10.1/mathquill.min.js";
-      s.onload = () => { window.__mathquillReady = true; init(); };
+      s.src =
+        "https://cdnjs.cloudflare.com/ajax/libs/mathquill/0.10.1/mathquill.min.js";
+      s.onload = () => {
+        window.__mathquillReady = true;
+        init();
+      };
       document.head.appendChild(s);
     };
-    if (window.__mathquillReady) { init(); return; }
-    if (window.jQuery) { loadMQ(); } else {
+    if (window.__mathquillReady) {
+      init();
+      return;
+    }
+    if (window.jQuery) {
+      loadMQ();
+    } else {
       const jq = document.createElement("script");
-      jq.src = "https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.1/jquery.min.js";
+      jq.src =
+        "https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.1/jquery.min.js";
       jq.onload = loadMQ;
       document.head.appendChild(jq);
     }
@@ -153,8 +236,12 @@ SlideTypeRegistry.set("math", {
 // ── iframe ────────────────────────────────────────────────────────────────────
 SlideTypeRegistry.set("iframe", {
   defaultData: () => ({ src: "" }),
-  deserialize(raw) { return { data: { src: raw.data?.src ?? "" } }; },
-  serialize(s)     { return { data: s.data }; },
+  deserialize(raw) {
+    return { data: { src: raw.data?.src ?? "" } };
+  },
+  serialize(s) {
+    return { data: s.data };
+  },
 
   mount(el, slide, onChange, utils) {
     SlideTypeRegistry.get("general").mount(el, slide, onChange, utils);
@@ -178,14 +265,17 @@ SlideTypeRegistry.set("iframe", {
         <div style="display:flex;flex-direction:column;gap:0.4rem;">
           <label class="edit-modal-label">Preview</label>
           <div id="iframe-preview" style="width:100%;height:200px;border:1px solid #ccc;border-radius:6px;overflow:hidden;background:#fff;">
-            ${src ? `<iframe src="${src}" style="width:100%;height:100%;border:none;" scrolling="yes" allowfullscreen></iframe>`
-                  : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;opacity:0.4;">Enter a URL above</div>`}
+            ${
+              src
+                ? `<iframe src="${src}" style="width:100%;height:100%;border:none;" scrolling="yes" allowfullscreen></iframe>`
+                : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;opacity:0.4;">Enter a URL above</div>`
+            }
           </div>
         </div>
       </div>
     `;
     const srcInput = bodyEl.querySelector("#iframe-src-input");
-    const preview  = bodyEl.querySelector("#iframe-preview");
+    const preview = bodyEl.querySelector("#iframe-preview");
     let debounce;
     srcInput.oninput = () => {
       slide.data.src = srcInput.value.trim();
@@ -205,21 +295,27 @@ SlideTypeRegistry.set("iframe", {
 //  DB helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
-function slideHash() { return "sh_" + Math.random().toString(36).substr(2, 9); }
+function slideHash() {
+  return "sh_" + Math.random().toString(36).substr(2, 9);
+}
 
 async function fracGet(ref) {
-    console.log("Getting: ", ref)
+  console.log("Getting: ", ref);
   const res = await Registry.responsibility_call("dbuserfractioning", APP_ID, {
-    type: "frac_get", id: APP_ID, ref,
+    type: "frac_get",
+    id: APP_ID,
+    ref,
   });
   if (res.type !== "success") throw new Error(res.status);
   return res.body ?? {};
 }
 
 async function fracSet(ref, body) {
-    console.log("Setting: ", ref)
+  console.log("Setting: ", ref);
   const res = await Registry.responsibility_call("dbuserfractioning", APP_ID, {
-    type: "frac_set", ref, body,
+    type: "frac_set",
+    ref,
+    body,
   });
   if (res.type !== "success") throw new Error(res.status);
 }
@@ -238,7 +334,7 @@ async function fracSet(ref, body) {
 
 async function loadSlidesForProject(projectHash, allProjectsOptional = null) {
   // 1. Fetch the full project tree from "projects" (or use provided data)
-  const allProjects = allProjectsOptional ?? await fracGet("projects");
+  const allProjects = allProjectsOptional ?? (await fracGet("projects"));
 
   // Navigate to the node at projectHash (supports "hash" or "hash/children/0/children/1" style paths)
   const projectNode = resolveProjectNode(allProjects, projectHash);
@@ -264,8 +360,11 @@ function resolveProjectNode(allProjects, projectHash) {
     const seg = parts[i];
     if (seg === "children") continue;
     const idx = parseInt(seg, 10);
-    if (!isNaN(idx)) { node = node?.children?.[idx]; }
-    else { node = node?.[seg]; }
+    if (!isNaN(idx)) {
+      node = node?.children?.[idx];
+    } else {
+      node = node?.[seg];
+    }
     if (!node) return null;
   }
   return node;
@@ -273,8 +372,10 @@ function resolveProjectNode(allProjects, projectHash) {
 
 function collectSlideRefs(node) {
   const refs = new Set();
-  (node.slideRefs || []).forEach(h => refs.add(h));
-  (node.children || []).forEach(child => collectSlideRefs(child).forEach(h => refs.add(h)));
+  (node.slideRefs || []).forEach((h) => refs.add(h));
+  (node.children || []).forEach((child) =>
+    collectSlideRefs(child).forEach((h) => refs.add(h)),
+  );
   return [...refs];
 }
 
@@ -283,33 +384,35 @@ function flattenProject(node, slidesPartition, depth, prefix) {
 
   // Title slide for this node
   result.push({
-    hash:   node.hash || null,  // project node hash (not a slide hash)
-    type:   "title",
-    title:  (prefix + " " + (node.name ?? "")).trim(),
+    hash: node.hash || null, // project node hash (not a slide hash)
+    type: "title",
+    title: (prefix + " " + (node.name ?? "")).trim(),
     footer: node.footer || "",
     depth,
     ...SlideTypeRegistry.get("title").deserialize(node),
   });
 
   // Content slides for this node (stored by ref in slideRefs)
-  (node.slideRefs || []).forEach(slideHash => {
+  (node.slideRefs || []).forEach((slideHash) => {
     const raw = slidesPartition[slideHash];
     if (!raw) return;
     const type = raw.type || "text";
     result.push({
-      slideHash,            // ← the key in the "slides" partition
+      slideHash, // ← the key in the "slides" partition
       type,
-      title:  raw.title  || "",
+      title: raw.title || "",
       footer: raw.footer || "",
-      depth:  depth + 1,
-      ...SlideTypeRegistry.get(type)?.deserialize(raw) ?? { data: raw.data },
+      depth: depth + 1,
+      ...(SlideTypeRegistry.get(type)?.deserialize(raw) ?? { data: raw.data }),
     });
   });
 
   // Recurse into children
   (node.children || []).forEach((child, idx) => {
     const nextPrefix = prefix ? `${prefix}${idx + 1}.` : `${idx + 1}.`;
-    result.push(...flattenProject(child, slidesPartition, depth + 1, nextPrefix));
+    result.push(
+      ...flattenProject(child, slidesPartition, depth + 1, nextPrefix),
+    );
   });
 
   return result;
@@ -330,27 +433,28 @@ function flattenProject(node, slidesPartition, depth, prefix) {
 
 async function saveSlides(flatSlides, projectHash) {
   // 1. Separate title slides from content slides
-  const contentSlides = flatSlides.filter(s => s.type !== "title");
+  const contentSlides = flatSlides.filter((s) => s.type !== "title");
 
   // 2. Ensure every content slide has a stable hash
-  contentSlides.forEach(s => {
+  contentSlides.forEach((s) => {
     if (!s.slideHash) s.slideHash = slideHash();
   });
 
   // 3. Write all changed slides to "slides" partition
   const slidesBody = {};
-  contentSlides.forEach(s => {
-    const handler = SlideTypeRegistry.get(s.type) ?? SlideTypeRegistry.get("text");
+  contentSlides.forEach((s) => {
+    const handler =
+      SlideTypeRegistry.get(s.type) ?? SlideTypeRegistry.get("text");
     slidesBody[s.slideHash] = {
-      type:   s.type,
-      title:  s.title  || "",
+      type: s.type,
+      title: s.title || "",
       footer: s.footer || "",
-      depth:  s.depth  || 0,
+      depth: s.depth || 0,
       ...handler.serialize(s),
     };
   });
-console.log("[saveSlides] contentSlides:", contentSlides);
-console.log("[saveSlides] slidesBody:", slidesBody);
+  console.log("[saveSlides] contentSlides:", contentSlides);
+  console.log("[saveSlides] slidesBody:", slidesBody);
   if (Object.keys(slidesBody).length > 0) {
     await fracSet("slides", slidesBody);
   }
@@ -363,7 +467,7 @@ console.log("[saveSlides] slidesBody:", slidesBody);
 
 async function patchProjectSlideRefs(flatSlides, projectHash) {
   const allProjects = await fracGet("projects");
-  const rootNode    = resolveProjectNode(allProjects, projectHash);
+  const rootNode = resolveProjectNode(allProjects, projectHash);
   if (!rootNode) return;
 
   // Group slides by their parent title slide (depth-based)
@@ -373,7 +477,7 @@ async function patchProjectSlideRefs(flatSlides, projectHash) {
   // Reset all slideRefs in this subtree first
   clearSlideRefs(rootNode);
 
-  flatSlides.forEach(slide => {
+  flatSlides.forEach((slide) => {
     if (slide.type === "title") {
       // Pop stack until we find a parent with lower depth
       while (stack.length > 1 && stack[stack.length - 1].depth >= slide.depth) {
@@ -381,18 +485,19 @@ async function patchProjectSlideRefs(flatSlides, projectHash) {
       }
       // Find matching child node by name (strip prefix numbers)
       const cleanName = slide.title.replace(/^[\d.]+\s+/, "").trim();
-      const parent    = stack[stack.length - 1].node;
-      let   matchNode = null;
+      const parent = stack[stack.length - 1].node;
+      let matchNode = null;
 
       if (stack.length === 1 && slide.depth === 0) {
         // This is the root node itself
         matchNode = rootNode;
       } else {
-        matchNode = (parent.children || []).find(c => c.name === cleanName) || null;
+        matchNode =
+          (parent.children || []).find((c) => c.name === cleanName) || null;
       }
 
       if (matchNode) {
-         if (!matchNode.slideRefs) matchNode.slideRefs = [];
+        if (!matchNode.slideRefs) matchNode.slideRefs = [];
         // Also persist title slide edits back to the node
         matchNode.description = slide.data || "";
         matchNode.footer = slide.footer || "";
@@ -641,16 +746,16 @@ const STYLES = `
 
 class SlideShowHandler {
   constructor(domElement, shadowRoot) {
-    this.el          = domElement;
-    this.shadow      = shadowRoot;
-    this.slides      = [];
+    this.el = domElement;
+    this.shadow = shadowRoot;
+    this.slides = [];
     this.activeIndex = 0;
     this.activeProjectHash = null;
     this.activeProjectName = "";
-    this.draggedIndex      = null;
-    this.currentDropIndex  = null;
+    this.draggedIndex = null;
+    this.currentDropIndex = null;
     this.autoScrollInterval = null;
-    this.resizeObserver     = null;
+    this.resizeObserver = null;
   }
 
   // ── Mount DOM ──────────────────────────────────────────────────────────────
@@ -679,11 +784,11 @@ class SlideShowHandler {
       <div class="status-bar" id="status">Ready — open a project from the Project Manager</div>
     `;
 
-    this.thumbnailsEl  = this.el.querySelector("#thumbnails");
-    this.screenEl      = this.el.querySelector("#screen");
+    this.thumbnailsEl = this.el.querySelector("#thumbnails");
+    this.screenEl = this.el.querySelector("#screen");
     this.screenWrapper = this.el.querySelector("#screen-wrapper");
-    this.statusEl      = this.el.querySelector("#status");
-    this.badgeEl       = this.el.querySelector("#project-badge");
+    this.statusEl = this.el.querySelector("#status");
+    this.badgeEl = this.el.querySelector("#project-badge");
 
     this._bindButtons();
     this._setupResize();
@@ -699,10 +804,12 @@ class SlideShowHandler {
     this._setStatus("Loading slides…");
 
     try {
-      this.slides      = await loadSlidesForProject(projectHash);
+      this.slides = await loadSlidesForProject(projectHash);
       this.activeIndex = 0;
       this._renderSlides();
-      this._setStatus(`${this.slides.filter(s => s.type !== "title").length} slide(s) loaded`);
+      this._setStatus(
+        `${this.slides.filter((s) => s.type !== "title").length} slide(s) loaded`,
+      );
     } catch (e) {
       this._setStatus("Load error: " + e.message);
       console.error("[SlideShowHandler] Load error:", e);
@@ -716,7 +823,9 @@ class SlideShowHandler {
     this._setStatus("Saving…");
     try {
       await saveSlides(this.slides, this.activeProjectHash);
-      this._setStatus(`Saved ✓ — ${this.slides.filter(s => s.type !== "title").length} slide(s)`);
+      this._setStatus(
+        `Saved ✓ — ${this.slides.filter((s) => s.type !== "title").length} slide(s)`,
+      );
     } catch (e) {
       this._setStatus("Save error: " + e.message);
       console.error("[SlideShowHandler] Save error:", e);
@@ -779,7 +888,7 @@ class SlideShowHandler {
     setTimeout(() => this._updateScaling(), 0);
 
     const isTitle = slide.type === "title";
-    this.el.querySelector("#btn-del").hidden  = isTitle;
+    this.el.querySelector("#btn-del").hidden = isTitle;
     this.el.querySelector("#btn-type").hidden = isTitle;
 
     const handler = SlideTypeRegistry.get(slide.type);
@@ -789,13 +898,20 @@ class SlideShowHandler {
   _createSlideEl(slide) {
     const el = document.createElement("div");
     el.className = "slide";
-    ["slide-header", "slide-body", "slide-footer"].forEach(cls => {
+    ["slide-header", "slide-body", "slide-footer"].forEach((cls) => {
       const d = document.createElement("div");
       d.className = cls;
       el.appendChild(d);
     });
-    const handler = SlideTypeRegistry.get(slide.type) ?? SlideTypeRegistry.get("text");
-    handler.mount(el, slide, this._makeOnChange(), this._getUtils(), this.activeProjectHash);
+    const handler =
+      SlideTypeRegistry.get(slide.type) ?? SlideTypeRegistry.get("text");
+    handler.mount(
+      el,
+      slide,
+      this._makeOnChange(),
+      this._getUtils(),
+      this.activeProjectHash,
+    );
     return el;
   }
 
@@ -809,13 +925,16 @@ class SlideShowHandler {
       if (root.id === modalId) {
         root.id = root.dataset.origId || "";
         root.style.cssText = root.dataset.origStyle || "";
-        delete root.dataset.origId; delete root.dataset.origStyle;
+        delete root.dataset.origId;
+        delete root.dataset.origStyle;
       } else {
-        root.dataset.origId    = root.id;
+        root.dataset.origId = root.id;
         root.dataset.origStyle = root.style.cssText;
         root.id = modalId;
         Object.assign(root.style, {
-          position: "fixed", inset: "1vw", zIndex: "9999",
+          position: "fixed",
+          inset: "1vw",
+          zIndex: "9999",
           boxShadow: "0 8px 48px rgba(0,0,0,0.9)",
           background: "var(--color-bg, #0c0e13)",
         });
@@ -827,7 +946,9 @@ class SlideShowHandler {
       if (!this.activeProjectHash) return;
       this.slides.splice(this.activeIndex + 1, 0, {
         slideHash: null,
-        type: "text", title: "New Slide", footer: "",
+        type: "text",
+        title: "New Slide",
+        footer: "",
         depth: this.slides[this.activeIndex]?.depth || 0,
         data: SlideTypeRegistry.get("text").defaultData(),
       });
@@ -841,7 +962,8 @@ class SlideShowHandler {
       if (!this.activeProjectHash) return;
       if (!confirm("Delete this slide? This cannot be undone.")) return;
       this.slides.splice(this.activeIndex, 1);
-      if (this.activeIndex >= this.slides.length) this.activeIndex = this.slides.length - 1;
+      if (this.activeIndex >= this.slides.length)
+        this.activeIndex = this.slides.length - 1;
       this._renderSlides();
       this._persist();
     };
@@ -853,7 +975,7 @@ class SlideShowHandler {
 
     // Edit data
     this.el.querySelector("#btn-edit").onclick = () => {
-      const slide   = this.slides[this.activeIndex];
+      const slide = this.slides[this.activeIndex];
       const handler = SlideTypeRegistry.get(slide.type);
       if (!handler?.editModal) return;
       this._showEditModal(slide, handler);
@@ -866,10 +988,14 @@ class SlideShowHandler {
 
     const dialog = document.createElement("div");
     dialog.className = "type-dialog";
-    dialog.innerHTML = `<h1>Slide type</h1>` +
+    dialog.innerHTML =
+      `<h1>Slide type</h1>` +
       [...SlideTypeRegistry.keys()]
-        .filter(k => k !== "general" && k !== "title")
-        .map(k => `<label><input type="radio" name="t" value="${k}"${k === slide.type ? " checked" : ""}> ${k}</label>`)
+        .filter((k) => k !== "general" && k !== "title")
+        .map(
+          (k) =>
+            `<label><input type="radio" name="t" value="${k}"${k === slide.type ? " checked" : ""}> ${k}</label>`,
+        )
         .join("");
     document.body.appendChild(dialog);
 
@@ -878,32 +1004,33 @@ class SlideShowHandler {
       const t = target.getBoundingClientRect();
       const d = dialog.getBoundingClientRect();
       const margin = 8;
-      let top  = t.bottom + margin;
+      let top = t.bottom + margin;
       let left = t.left;
       if (left + d.width > window.innerWidth) left = t.right - d.width;
-      if (top  + d.height > window.innerHeight) top = t.top - d.height - margin;
+      if (top + d.height > window.innerHeight) top = t.top - d.height - margin;
       dialog.style.cssText += `top:${top}px;left:${left}px;`;
     };
     position();
 
     let destroyed = false;
     const destroy = () => {
-      if (destroyed) return; destroyed = true;
+      if (destroyed) return;
+      destroyed = true;
       document.removeEventListener("pointerdown", onDown, true);
       dialog.remove();
     };
-    const onDown = e => {
+    const onDown = (e) => {
       if (!e.composedPath().includes(dialog)) destroy();
     };
     document.addEventListener("pointerdown", onDown, true);
 
-    dialog.addEventListener("change", e => {
+    dialog.addEventListener("change", (e) => {
       if (e.target.name !== "t") return;
       const newType = e.target.value;
       if (newType === slide.type) return;
-      slide.type  = newType;
+      slide.type = newType;
       slide.depth = slide.depth || 0;
-      slide.data  = SlideTypeRegistry.get(newType).defaultData();
+      slide.data = SlideTypeRegistry.get(newType).defaultData();
       this._renderSlides();
       this._persist();
       destroy();
@@ -930,14 +1057,21 @@ class SlideShowHandler {
 
     handler.editModal(
       modal.querySelector("#_ssh-edit-body"),
-      slide, this._makeOnChange(), this._getUtils()
+      slide,
+      this._makeOnChange(),
+      this._getUtils(),
     );
 
     const close = () => overlay.remove();
     modal.querySelector("#_ssh-edit-close").onclick = close;
-    overlay.addEventListener("pointerdown", e => { if (e.target === overlay) close(); });
+    overlay.addEventListener("pointerdown", (e) => {
+      if (e.target === overlay) close();
+    });
     document.addEventListener("keydown", function onKey(e) {
-      if (e.key === "Escape") { close(); document.removeEventListener("keydown", onKey); }
+      if (e.key === "Escape") {
+        close();
+        document.removeEventListener("keydown", onKey);
+      }
     });
   }
 
@@ -954,15 +1088,19 @@ class SlideShowHandler {
       const { width, height } = this.screenWrapper.getBoundingClientRect();
       const scale = Math.min(width / 1600, height / 900);
       Object.assign(this.screenEl.style, {
-        width: "1600px", height: "900px",
+        width: "1600px",
+        height: "900px",
         transform: `scale(${scale})`,
         transformOrigin: "center center",
       });
     }
-    this.thumbnailsEl?.querySelectorAll(".thumbnail").forEach(thumb => {
+    this.thumbnailsEl?.querySelectorAll(".thumbnail").forEach((thumb) => {
       const scale = thumb.getBoundingClientRect().width / 1600;
       const stage = thumb.querySelector(".thumb-stage");
-      if (stage) { stage.style.transform = `scale(${scale})`; stage.style.transformOrigin = "top left"; }
+      if (stage) {
+        stage.style.transform = `scale(${scale})`;
+        stage.style.transformOrigin = "top left";
+      }
     });
   }
 
@@ -971,14 +1109,22 @@ class SlideShowHandler {
   _setupDnd() {
     const el = this.thumbnailsEl;
 
-    el.addEventListener("dragstart", e => {
+    el.addEventListener("dragstart", (e) => {
       const thumb = e.target.closest(".thumbnail");
       if (!thumb) return;
       this.draggedIndex = [...el.children].indexOf(thumb);
-      if (this.draggedIndex === 0) { e.preventDefault(); return; } // don't drag title slide
+      if (this.draggedIndex === 0) {
+        e.preventDefault();
+        return;
+      } // don't drag title slide
 
       const clone = thumb.cloneNode(true);
-      Object.assign(clone.style, { position: "absolute", top: "-9999px", opacity: "0.8", width: thumb.offsetWidth + "px" });
+      Object.assign(clone.style, {
+        position: "absolute",
+        top: "-9999px",
+        opacity: "0.8",
+        width: thumb.offsetWidth + "px",
+      });
       document.body.appendChild(clone);
       e.dataTransfer.setDragImage(clone, e.offsetX, e.offsetY);
       setTimeout(() => clone.remove(), 0);
@@ -987,16 +1133,19 @@ class SlideShowHandler {
       e.dataTransfer.effectAllowed = "move";
     });
 
-    el.addEventListener("dragend", e => {
+    el.addEventListener("dragend", (e) => {
       const thumb = e.target.closest(".thumbnail");
       if (!thumb) return;
       thumb.classList.remove("dragging");
       this._clearAutoScroll();
-      [...el.children].forEach(c => { c.style.transition = ""; c.style.transform = ""; });
+      [...el.children].forEach((c) => {
+        c.style.transition = "";
+        c.style.transform = "";
+      });
       this.currentDropIndex = null;
     });
 
-    el.addEventListener("dragover", e => {
+    el.addEventListener("dragover", (e) => {
       e.preventDefault();
       if (this.draggedIndex === null || this.draggedIndex === 0) return;
       this._handleAutoScroll(e.clientY);
@@ -1007,21 +1156,34 @@ class SlideShowHandler {
       }
     });
 
-    el.addEventListener("drop", e => {
-      e.preventDefault(); e.stopPropagation();
+    el.addEventListener("drop", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
       if (this.draggedIndex === null || this.draggedIndex === 0) return;
 
       const idx = this._getDropIndex(e.clientY);
-      if (idx === 0) { this.draggedIndex = null; this._clearAutoScroll(); return; }
+      if (idx === 0) {
+        this.draggedIndex = null;
+        this._clearAutoScroll();
+        return;
+      }
 
       if (idx !== null && idx !== this.draggedIndex) {
         const insert = idx > this.draggedIndex ? idx - 1 : idx;
         const [moved] = this.slides.splice(this.draggedIndex, 1);
         this.slides.splice(insert, 0, moved);
 
-        if      (this.activeIndex === this.draggedIndex)                                        this.activeIndex = insert;
-        else if (this.draggedIndex < this.activeIndex && insert >= this.activeIndex)            this.activeIndex--;
-        else if (this.draggedIndex > this.activeIndex && insert <= this.activeIndex)            this.activeIndex++;
+        if (this.activeIndex === this.draggedIndex) this.activeIndex = insert;
+        else if (
+          this.draggedIndex < this.activeIndex &&
+          insert >= this.activeIndex
+        )
+          this.activeIndex--;
+        else if (
+          this.draggedIndex > this.activeIndex &&
+          insert <= this.activeIndex
+        )
+          this.activeIndex++;
 
         this._renderSlides();
         this._persist();
@@ -1034,7 +1196,7 @@ class SlideShowHandler {
 
   _getDropIndex(clientY) {
     const thumbs = [...this.thumbnailsEl.children];
-    const rect   = this.thumbnailsEl.getBoundingClientRect();
+    const rect = this.thumbnailsEl.getBoundingClientRect();
     if (clientY < rect.top) return 1;
     for (let i = 0; i < thumbs.length; i++) {
       if (i === this.draggedIndex) continue;
@@ -1045,57 +1207,78 @@ class SlideShowHandler {
   }
 
   _animateThumbs(dropIndex) {
-    const thumbs  = [...this.thumbnailsEl.children];
+    const thumbs = [...this.thumbnailsEl.children];
     const dragged = thumbs[this.draggedIndex];
     if (!dragged) return;
-    const gap   = parseFloat(getComputedStyle(this.thumbnailsEl).gap) || 6;
+    const gap = parseFloat(getComputedStyle(this.thumbnailsEl).gap) || 6;
     const shift = dragged.getBoundingClientRect().height + gap;
     thumbs.forEach((t, i) => {
       if (i === this.draggedIndex || i === 0) return;
       let dir = 0;
-      if (dropIndex <= this.draggedIndex && i >= dropIndex && i < this.draggedIndex) dir =  1;
-      if (dropIndex >  this.draggedIndex && i <  dropIndex && i > this.draggedIndex) dir = -1;
+      if (
+        dropIndex <= this.draggedIndex &&
+        i >= dropIndex &&
+        i < this.draggedIndex
+      )
+        dir = 1;
+      if (
+        dropIndex > this.draggedIndex &&
+        i < dropIndex &&
+        i > this.draggedIndex
+      )
+        dir = -1;
       t.style.transition = "transform 0.2s ease-out";
-      t.style.transform  = dir ? `translateY(${dir * shift}px)` : "";
+      t.style.transform = dir ? `translateY(${dir * shift}px)` : "";
     });
   }
 
   _handleAutoScroll(clientY) {
-    const thr = 80, spd = 8;
+    const thr = 80,
+      spd = 8;
     const { top, bottom } = this.thumbnailsEl.getBoundingClientRect();
     this._clearAutoScroll();
-    const dt = clientY - top, db = bottom - clientY;
+    const dt = clientY - top,
+      db = bottom - clientY;
     if (dt > 0 && dt < thr) {
       const s = spd * (1 - dt / thr);
-      this.autoScrollInterval = setInterval(() => { if (this.thumbnailsEl.scrollTop > 0) this.thumbnailsEl.scrollTop -= s; }, 16);
+      this.autoScrollInterval = setInterval(() => {
+        if (this.thumbnailsEl.scrollTop > 0) this.thumbnailsEl.scrollTop -= s;
+      }, 16);
     } else if (db > 0 && db < thr) {
       const s = spd * (1 - db / thr);
-      this.autoScrollInterval = setInterval(() => { this.thumbnailsEl.scrollTop += s; }, 16);
+      this.autoScrollInterval = setInterval(() => {
+        this.thumbnailsEl.scrollTop += s;
+      }, 16);
     }
   }
 
   _clearAutoScroll() {
-    if (this.autoScrollInterval) { clearInterval(this.autoScrollInterval); this.autoScrollInterval = null; }
+    if (this.autoScrollInterval) {
+      clearInterval(this.autoScrollInterval);
+      this.autoScrollInterval = null;
+    }
   }
 
   // ── Status ─────────────────────────────────────────────────────────────────
-  _setStatus(msg) { if (this.statusEl) this.statusEl.textContent = msg; }
+  _setStatus(msg) {
+    if (this.statusEl) this.statusEl.textContent = msg;
+  }
 
   // ── Utils passed to slide type handlers ───────────────────────────────────
   _getUtils() {
     return {
       restoreContentWithBreaks: this._restoreContent.bind(this),
       extractContentWithBreaks: this._extractContent.bind(this),
-      colorFromIndex:           this._colorFromIndex.bind(this),
-      fadeHslTowardWhite:       this._fadeHsl.bind(this),
+      colorFromIndex: this._colorFromIndex.bind(this),
+      fadeHslTowardWhite: this._fadeHsl.bind(this),
     };
   }
 
   _restoreContent(text) {
     return (text || "")
       .split("\n")
-      .filter(l => l.trim())
-      .map(l => `<div>${l}</div>`)
+      .filter((l) => l.trim())
+      .map((l) => `<div>${l}</div>`)
       .join("");
   }
 
@@ -1104,22 +1287,31 @@ class SlideShowHandler {
       if (node.nodeType === Node.TEXT_NODE) return node.textContent;
       if (node.nodeType === Node.ELEMENT_NODE) {
         const t = node.tagName;
-        if (t === "IMG")  return node.outerHTML;
-        if (t === "BR")   return "<br>";
-        if (["B","I","U","STRONG","EM"].includes(t)) return `<${t.toLowerCase()}>${[...node.childNodes].map(flatten).join("")}</${t.toLowerCase()}>`;
-        if (t === "DIV")  return [...node.childNodes].map(flatten).join("");
+        if (t === "IMG") return node.outerHTML;
+        if (t === "BR") return "<br>";
+        if (["B", "I", "U", "STRONG", "EM"].includes(t))
+          return `<${t.toLowerCase()}>${[...node.childNodes].map(flatten).join("")}</${t.toLowerCase()}>`;
+        if (t === "DIV") return [...node.childNodes].map(flatten).join("");
         return node.innerHTML;
       }
       return "";
     }
-    return [...el.cloneNode(true).childNodes].map(flatten).filter(Boolean).join("\n");
+    return [...el.cloneNode(true).childNodes]
+      .map(flatten)
+      .filter(Boolean)
+      .join("\n");
   }
 
-  _colorFromIndex(i) { return `hsl(${((i * 137.508) % 360).toFixed(1)}, 65%, 55%)`; }
+  _colorFromIndex(i) {
+    return `hsl(${((i * 137.508) % 360).toFixed(1)}, 65%, 55%)`;
+  }
 
   _fadeHsl(hsl, satFactor = 0.6, lightBoost = 20) {
-    return hsl.replace(/hsl\(\s*([\d.]+)\s*,\s*([\d.]+)%\s*,\s*([\d.]+)%\s*\)/,
-      (_, h, s, l) => `hsl(${h}, ${Math.max(0, Math.min(100, s * satFactor))}%, ${Math.max(0, Math.min(100, +l + lightBoost))}%)`);
+    return hsl.replace(
+      /hsl\(\s*([\d.]+)\s*,\s*([\d.]+)%\s*,\s*([\d.]+)%\s*\)/,
+      (_, h, s, l) =>
+        `hsl(${h}, ${Math.max(0, Math.min(100, s * satFactor))}%, ${Math.max(0, Math.min(100, +l + lightBoost))}%)`,
+    );
   }
 }
 
@@ -1136,7 +1328,8 @@ async function SlideShowRequestHandler(callerApp, callBody) {
   if (type === "load_project") {
     const { hash, name } = callBody;
     if (!hash) return { type: "error", status: "Missing 'hash'." };
-    if (!_instance) return { type: "error", status: "SlideShowHandler not mounted yet." };
+    if (!_instance)
+      return { type: "error", status: "SlideShowHandler not mounted yet." };
     await _instance.loadProject(hash, name);
     return { type: "success", status: "" };
   }
@@ -1149,14 +1342,10 @@ async function SlideShowRequestHandler(callerApp, callBody) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default async function AppBody() {
-  const winResult = await Registry.responsibility_call(
-    "DomHandler",
-    APP_ID,
-    {
-      type: "division_create",
-      options: { title: "SlideShow", icon: "🎞", width: 900, height: 580 },
-    }
-  );
+  const winResult = await Registry.responsibility_call("DomHandler", APP_ID, {
+    type: "division_create",
+    options: { title: "SlideShow", icon: "🎞", width: 900, height: 580 },
+  });
 
   if (winResult.type !== "success") {
     console.error("[SlideShowHandler] Window failed:", winResult.status);
@@ -1178,23 +1367,43 @@ export default async function AppBody() {
   _instance.mount();
 
   // Register responsibility so ProjectManager (or anyone) can trigger project loads
-  Registry.responsibility_create("SlideShowHandler", APP_ID, SlideShowRequestHandler);
+  Registry.responsibility_create(
+    "SlideShowHandler",
+    APP_ID,
+    SlideShowRequestHandler,
+  );
 
+  Registry.responsibility_monitor_create(
+    "dbuserfractioning",
+    APP_ID,
+    async (AppName, CallBody, authorityPromise) => {
+      if (AppName === APP_ID) return; // ← add this line
+      if (CallBody.type !== "frac_set") return;
+      if (CallBody.ref !== "projects") return;
+      if (!_instance) return;
+      if (!_instance.activeProjectHash) return;
+      // Use the projects data from the frac_set call instead of reloading from DB
+      const allProjects = CallBody.body ?? {};
+      try {
+        _instance.slides = await loadSlidesForProject(
+          _instance.activeProjectHash,
+          allProjects,
+        );
+        _instance._renderSlides();
+      } catch (e) {
+        console.error("[SlideShowHandler] Monitor reload error:", e);
+      }
+    },
+  );
 
-  Registry.responsibility_monitor_create("dbuserfractioning", APP_ID, async (AppName, CallBody, authorityPromise) => {
-    if (AppName === APP_ID) return;  // ← add this line
-    if (CallBody.type !== "frac_set") return;
-    if (CallBody.ref !== "projects") return;
-    if (!_instance) return;
-    if (!_instance.activeProjectHash) return;
-    // Use the projects data from the frac_set call instead of reloading from DB
-    const allProjects = CallBody.body ?? {};
-    try {
-      _instance.slides = await loadSlidesForProject(_instance.activeProjectHash, allProjects);
-      _instance._renderSlides();
-    } catch (e) {
-      console.error("[SlideShowHandler] Monitor reload error:", e);
+  const observer = new MutationObserver(() => {
+    if (!document.contains(ShadowRoot.host)) {
+      console.log("doesnt contain");
+      observer.disconnect();
+      Registry.responsibility_delete("SlideShowHandler", APP_ID);
+      Registry.app_terminate(APP_ID);
     }
-  })
+  });
+  observer.observe(document.body, { childList: true, subtree: true });
   console.log("[SlideShowHandler] Ready.");
 }

@@ -147,6 +147,31 @@ function ensureTaskbar() {
     let el = document.getElementById("__dh_taskbar__");
     if (!el) {
         el = document.createElement("div"); el.id = "__dh_taskbar__"; document.body.appendChild(el);
+        
+        // Add permanent AppStarter button on the left
+        const appStarterBtn = document.createElement("button");
+        appStarterBtn.className = "dh-taskbar-btn";
+        appStarterBtn.innerHTML = `<span class="tb-icon">⊞</span>`;
+        appStarterBtn.title = "Start App Starter";
+        appStarterBtn.onclick = () => {
+            if (!Registry.app_check_exists("AppStarter")) {
+                // Import and start AppStarter if not already running
+                import("../../apps/AppStarter/script.js")
+                    .then((AppModule) => {
+                        const AppBody = AppModule.default;
+                        Registry.app_start("AppStarter", AppBody);
+                    })
+                    .catch((e) => {
+                        console.error(`Failed to start AppStarter: ${e}`);
+                    });
+            } else {
+                // If already running, focus its window (assuming it has one)
+                // For now, just log that it's already running
+                console.log("AppStarter is already running");
+            }
+        };
+        el.appendChild(appStarterBtn);
+        
         const clock = document.createElement("div"); clock.className = "dh-taskbar-clock"; el.appendChild(clock);
         const tick = () => {
             const n = new Date();

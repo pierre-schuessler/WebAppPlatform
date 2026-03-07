@@ -40,11 +40,26 @@ export const Registry = (() => {
         return { type: "error", status: "App doesn't exists with this name." };
       }
 
-      for (const ResponsibilityBody of Object.values(ResponsibilityRegistry)) {
-        if (ResponsibilityBody["authority"]["name"] === AppName) {
-          return { type: "error", status: "App has a responsibility." };
+      // iterate responsibilities to see if this app is still the authority
+      // of any of them.  an app can safely shut down if its *only* remaining
+      // responsibility is named identically – in that case we wipe it out
+      // automatically.  all other cases where the app still owns a
+      // responsibility will block termination and leave the registry intact.
+      for (const [ResponsibilityName, ResponsibilityBody] of Object.entries(ResponsibilityRegistry)) {
+        if (ResponsibilityBody.authority.name !== AppName) {
+          continue; // not owned by the terminating app
         }
+
+        if (ResponsibilityName === AppName) {
+          // special case: self‑named responsibility, remove it and keep going
+          delete ResponsibilityRegistry[ResponsibilityName];
+          continue;
+        }
+
+        // found a different responsibility we own – cannot terminate
+        return { type: "error", status: "App has a responsibility." };
       }
+
 
       for (const ResponsibilityBody of Object.values(ResponsibilityRegistry)) {
         if (AppName in ResponsibilityBody["monitors"]) {
@@ -111,6 +126,21 @@ export const Registry = (() => {
         delete AvailabilityListeners[ResponsibilityName];
       }
 
+      return { type: "success", status: "" };
+    },
+
+    responsibility_delete(ResponsibilityName, AppName) {
+      if (!(ResponsibilityName in ResponsibilityRegistry)) {
+        return { type: "error", status: "Responsibility does not exist." };
+      }
+      if (ResponsibilityRegistry[ResponsibilityName]["authority"]["name"] !== AppName) {
+        return {
+          type: "error",
+          status: "App is not the authority of this responsibility.",
+        };
+      }
+      delete ResponsibilityRegistry[ResponsibilityName];
+      console.log(`Responsibility deleted: ${ResponsibilityName} by ${AppName}`);
       return { type: "success", status: "" };
     },
 
