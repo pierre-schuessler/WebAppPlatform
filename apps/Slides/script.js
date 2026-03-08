@@ -5,9 +5,11 @@
 // DB layout (via dbuserfractioning):
 //
 //   frac_ref "projects"
-//     └─ {projectHash} → { name, footer, description, slides:[], children:[] }
-//        (slides[] here contains ONLY slide-ref hashes, e.g. ["sh_abc", "sh_def"])
-//        (children[] nodes also carry slideRefs arrays, recursively)
+//     └─ {projectHash} → { name, footer, description,
+//                          references: { slides: ["sh_abc", "sh_def"] },
+//                          children:[] }
+//        (references.slides[] contains ONLY slide-ref hashes)
+//        (children[] nodes also carry slides objects, recursively)
 //
 //   frac_ref "slides"
 //     └─ {slideHash}  → { type, title, footer, data, depth }
@@ -312,39 +314,62 @@ async function fracGet(ref) {
 
 async function fracSet(ref, body) {
   console.log("Setting: ", ref);
+  let meta = {};
+  if (ref == "slides"){
+    // send extra info to not save the dataRefs here
+    meta = { skipDataRefs: true };
+  }
   const res = await Registry.responsibility_call("dbuserfractioning", APP_ID, {
     type: "frac_set",
     ref,
     body,
+    meta,
   });
   if (res.type !== "success") throw new Error(res.status);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+//  fracGetByKeys — fetch specific slide hashes directly from "slides" partition
+//  without going through the dataRefs gate. The keys are trusted because they
+//  come from the project tree the user already has read access to.
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function fracGetSlidesByKeys(keys) {
+  if (!keys || keys.length === 0) return {};
+  const res = await Registry.responsibility_call("dbuserfractioning", APP_ID, {
+    type: "frac_get_by_keys",
+    ref: "slides",
+    keys,
+  });
+  if (res.type !== "success") throw new Error(res.status);
+  return res.body ?? {};
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 //  Load: project node → flat slide array
 //
-//  Project node shape expected (written by ProjectManager):
+//  Project node shape (written by ProjectManager):
 //    { name, footer, description,
-//      slideRefs: ["sh_aaa", "sh_bbb"],   ← hashes only, no inline data
+//      slides: { slides: ["sh_aaa", "sh_bbb"] },   ← refs wrapped in object
 //      children: [ ...same shape... ] }
 //
-//  We fetch all unique slide hashes from the "slides" DB partition,
-//  then reconstruct the flat slide array in the correct order.
+//  We collect all unique slide hashes from the tree, fetch them directly
+//  from the "slides" partition by key, then flatten into display order.
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function loadSlidesForProject(projectHash, allProjectsOptional = null) {
   // 1. Fetch the full project tree from "projects" (or use provided data)
   const allProjects = allProjectsOptional ?? (await fracGet("projects"));
 
-  // Navigate to the node at projectHash (supports "hash" or "hash/children/0/children/1" style paths)
+  // Navigate to the node at projectHash
   const projectNode = resolveProjectNode(allProjects, projectHash);
   if (!projectNode) throw new Error(`Project node not found: ${projectHash}`);
 
   // 2. Collect all unique slide hashes referenced in this subtree
   const allRefs = collectSlideRefs(projectNode);
 
-  // 3. Fetch all slides in one batch from "slides" partition
-  const slidesPartition = allRefs.length > 0 ? await fracGet("slides") : {};
+  // 3. Fetch slides directly by their keys (bypasses dataRefs gate)
+  const slidesPartition = await fracGetSlidesByKeys(allRefs);
 
   // 4. Flatten the project tree into a display slide array
   return flattenProject(projectNode, slidesPartition, 0, "");
@@ -352,7 +377,6 @@ async function loadSlidesForProject(projectHash, allProjectsOptional = null) {
 
 function resolveProjectNode(allProjects, projectHash) {
   if (!projectHash) return null;
-  // projectHash can be a simple hash key or a path like "hash/children/2/children/0"
   const parts = projectHash.split("/").filter(Boolean);
   let node = allProjects[parts[0]];
   if (!node) return null;
@@ -370,9 +394,22 @@ function resolveProjectNode(allProjects, projectHash) {
   return node;
 }
 
+// Reads slide refs from the new { slides: { slides: [...] } } shape,
+// with fallback to the legacy bare array for backwards compatibility.
+function getSlideRefsFromNode(node) {
+  if (node.references && Array.isArray(node.references.slides)) {
+    return node.references.slides;
+  }
+  // Legacy fallback: bare slideRefs array
+  if (Array.isArray(node.slideRefs) || (node.slides && Array.isArray(node.slides.slides))) {
+    return node.slideRefs || node.slides?.slides || [];
+  }
+  return [];
+}
+
 function collectSlideRefs(node) {
   const refs = new Set();
-  (node.slideRefs || []).forEach((h) => refs.add(h));
+  getSlideRefsFromNode(node).forEach((h) => refs.add(h));
   (node.children || []).forEach((child) =>
     collectSlideRefs(child).forEach((h) => refs.add(h)),
   );
@@ -384,7 +421,7 @@ function flattenProject(node, slidesPartition, depth, prefix) {
 
   // Title slide for this node
   result.push({
-    hash: node.hash || null, // project node hash (not a slide hash)
+    hash: node.hash || null,
     type: "title",
     title: (prefix + " " + (node.name ?? "")).trim(),
     footer: node.footer || "",
@@ -392,13 +429,13 @@ function flattenProject(node, slidesPartition, depth, prefix) {
     ...SlideTypeRegistry.get("title").deserialize(node),
   });
 
-  // Content slides for this node (stored by ref in slideRefs)
-  (node.slideRefs || []).forEach((slideHash) => {
+  // Content slides for this node
+  getSlideRefsFromNode(node).forEach((slideHash) => {
     const raw = slidesPartition[slideHash];
     if (!raw) return;
     const type = raw.type || "text";
     result.push({
-      slideHash, // ← the key in the "slides" partition
+      slideHash,
       type,
       title: raw.title || "",
       footer: raw.footer || "",
@@ -419,16 +456,10 @@ function flattenProject(node, slidesPartition, depth, prefix) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  Save: flat slide array → upsert changed slides + update project slideRefs
+//  Save: flat slide array → upsert changed slides + update project slides refs
 //
 //  We ONLY touch the "slides" partition — we never rewrite the project tree.
-//  ProjectManager owns the project tree. We just update:
-//    - slides/{hash}  for every non-title slide
-//    - projects/{projectHash}.slideRefs (only the top-level node for now)
-//
-//  For full recursive support the project node itself carries slideRefs at
-//  each level — this save routine updates all of them by re-walking the
-//  flat array.
+//  For project nodes we update references.slides (the new shape) at each level.
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function saveSlides(flatSlides, projectHash) {
@@ -459,9 +490,7 @@ async function saveSlides(flatSlides, projectHash) {
     await fracSet("slides", slidesBody);
   }
 
-  // 4. Rebuild slideRefs on the project node(s)
-  //    We do this by re-fetching the project tree, patching slideRefs at the
-  //    correct nodes based on depth groups, then writing back.
+  // 4. Rebuild references.slides on the project node(s)
   await patchProjectSlideRefs(flatSlides, projectHash);
 }
 
@@ -470,26 +499,21 @@ async function patchProjectSlideRefs(flatSlides, projectHash) {
   const rootNode = resolveProjectNode(allProjects, projectHash);
   if (!rootNode) return;
 
-  // Group slides by their parent title slide (depth-based)
-  // We walk the flat array and mirror the stack logic from unflatten
   const stack = [{ node: rootNode, depth: -1 }];
 
-  // Reset all slideRefs in this subtree first
+  // Reset all slide ref arrays in this subtree
   clearSlideRefs(rootNode);
 
   flatSlides.forEach((slide) => {
     if (slide.type === "title") {
-      // Pop stack until we find a parent with lower depth
       while (stack.length > 1 && stack[stack.length - 1].depth >= slide.depth) {
         stack.pop();
       }
-      // Find matching child node by name (strip prefix numbers)
       const cleanName = slide.title.replace(/^[\d.]+\s+/, "").trim();
       const parent = stack[stack.length - 1].node;
       let matchNode = null;
 
       if (stack.length === 1 && slide.depth === 0) {
-        // This is the root node itself
         matchNode = rootNode;
       } else {
         matchNode =
@@ -497,8 +521,12 @@ async function patchProjectSlideRefs(flatSlides, projectHash) {
       }
 
       if (matchNode) {
-        if (!matchNode.slideRefs) matchNode.slideRefs = [];
-        // Also persist title slide edits back to the node
+        // Ensure the new shape exists
+        if (!matchNode.references || typeof matchNode.references !== "object") {
+          matchNode.references = { slides: [] };
+        }
+        matchNode.references.slides = [];
+        // Persist title slide edits back to the node
         matchNode.description = slide.data || "";
         matchNode.footer = slide.footer || "";
         stack.push({ node: matchNode, depth: slide.depth });
@@ -506,8 +534,10 @@ async function patchProjectSlideRefs(flatSlides, projectHash) {
     } else {
       // Content slide — attach ref to current top of stack
       const top = stack[stack.length - 1].node;
-      if (!top.slideRefs) top.slideRefs = [];
-      top.slideRefs.push(slide.slideHash);
+      if (!top.references || typeof top.references !== "object") {
+        top.references = { slides: [] };
+      }
+      top.references.slides.push(slide.slideHash);
     }
   });
 
@@ -518,7 +548,10 @@ async function patchProjectSlideRefs(flatSlides, projectHash) {
 }
 
 function clearSlideRefs(node) {
-  node.slideRefs = [];
+  // Always write the new shape; drop legacy slideRefs if present
+  node.references = { slides: [] };
+  delete node.slideRefs;
+  delete node.slides;
   (node.children || []).forEach(clearSlideRefs);
 }
 
@@ -999,7 +1032,6 @@ class SlideShowHandler {
         .join("");
     document.body.appendChild(dialog);
 
-    // Position near button
     const position = () => {
       const t = target.getBoundingClientRect();
       const d = dialog.getBoundingClientRect();
@@ -1116,7 +1148,7 @@ class SlideShowHandler {
       if (this.draggedIndex === 0) {
         e.preventDefault();
         return;
-      } // don't drag title slide
+      }
 
       const clone = thumb.cloneNode(true);
       Object.assign(clone.style, {
@@ -1316,8 +1348,7 @@ class SlideShowHandler {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  Responsibility handler — lets other apps call "SlideShowHandler"
-//  to load a project programmatically (same signal as before, but via Registry)
+//  Responsibility handler
 // ─────────────────────────────────────────────────────────────────────────────
 
 let _instance = null;
@@ -1354,7 +1385,6 @@ export default async function AppBody() {
 
   const { DomElement, ShadowRoot } = winResult.data;
 
-  // Inject styles
   if (!ShadowRoot.querySelector("style[data-ssh]")) {
     const s = document.createElement("style");
     s.dataset.ssh = "1";
@@ -1362,11 +1392,9 @@ export default async function AppBody() {
     ShadowRoot.insertBefore(s, ShadowRoot.firstChild);
   }
 
-  // Mount handler
   _instance = new SlideShowHandler(DomElement, ShadowRoot);
   _instance.mount();
 
-  // Register responsibility so ProjectManager (or anyone) can trigger project loads
   Registry.responsibility_create(
     "SlideShowHandler",
     APP_ID,
@@ -1377,12 +1405,11 @@ export default async function AppBody() {
     "dbuserfractioning",
     APP_ID,
     async (AppName, CallBody, authorityPromise) => {
-      if (AppName === APP_ID) return; // ← add this line
+      if (AppName === APP_ID) return;
       if (CallBody.type !== "frac_set") return;
       if (CallBody.ref !== "projects") return;
       if (!_instance) return;
       if (!_instance.activeProjectHash) return;
-      // Use the projects data from the frac_set call instead of reloading from DB
       const allProjects = CallBody.body ?? {};
       try {
         _instance.slides = await loadSlidesForProject(

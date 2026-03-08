@@ -12,8 +12,10 @@
 //      If SlideShowHandler is already up, fires immediately (on_available is instant).
 //
 // ── DB contract ──────────────────────────────────────────────────────────────
-//   ProjectManager NEVER touches slideRefs — those belong to SlideShowHandler.
-//   It round-trips them opaquely through dataset so they survive saves.
+//   ProjectManager NEVER touches the slides partition — that belongs to SlideShowHandler.
+//   Slide references are stored as:
+//     node.slides = { slides: ["sh_abc", "sh_def"] }
+//   They are round-tripped opaquely through dataset so they survive saves.
 //
 // ── Share feature ────────────────────────────────────────────────────────────
 //   Root-level projects have a 🔗 share button in their action bar.
@@ -23,6 +25,8 @@
 //     2. Write users/{recipientUid}/dataRefs/projects/{hash}: true
 //        — the recipient now points at the same data/projects/{hash} as the owner.
 //        Both users see live changes through their normal frac_get calls.
+//   Note: slides dataRefs are NOT shared — slide data is fetched directly by
+//   key from the project's slides.slides array, so no extra access grants needed.
 //
 import { Registry } from "../../WebAppPlatform-main.js";
 
@@ -49,7 +53,7 @@ function ensureHashes(projects) {
     if (!p.hash) p.hash = randomHash();
     if (!p.description) p.description = "";
     if (!p.footer) p.footer = "";
-    // deliberately NOT touching p.slideRefs — SlideShowHandler owns those
+    // deliberately NOT touching p.references — SlideShowHandler owns that
     if (p.children?.length) ensureHashes(p.children);
   });
 }
@@ -115,10 +119,11 @@ function encodeEmail(email) {
 // Share a root-level project with another user identified by email.
 // Returns { ok: true } or { ok: false, reason: string }.
 //
-// We simply add the project's existing hash to the recipient's dataRefs index:
+// We add the project's existing hash to the recipient's dataRefs index:
 //   users/{recipientUid}/dataRefs/projects/{hash}: true
 //
 // Both users then point at the same data/projects/{hash} — fully live-synced.
+// Slides are fetched directly by key, so no slides dataRefs grant is needed.
 async function shareProjectWithEmail(project, recipientEmail) {
   // 1. Resolve email → UID via the index written by Firebase.js on login
   const encoded = encodeEmail(recipientEmail);
@@ -144,7 +149,8 @@ async function shareProjectWithEmail(project, recipientEmail) {
     return { ok: false, reason: "That's your own account!" };
   }
 
-  // 3. Grant access — just point the recipient's index at the same hash
+  // 3. Grant access to the project — point the recipient's index at the same hash.
+  //    No slides dataRefs needed: SlideShowHandler fetches slides directly by key.
   const refRes = await Registry.responsibility_call("Database", APP_ID, {
     type: "db_set",
     path: `users/${recipientUid}/dataRefs/projects/${project.hash}`,
@@ -254,8 +260,7 @@ class ProjectTree {
     this.autoScrollInterval = null;
     this.nodeToDelete = null;
     this._isRenaming = false;
-    // Share modal state
-    this._shareProject = null; // project data being shared
+    this._shareProject = null;
   }
 
   // ── Mount DOM ──────────────────────────────────────────────────────────────
@@ -330,7 +335,6 @@ class ProjectTree {
     this.shareEmailEl.onkeydown = (e) => {
       if (e.key === "Enter") this._doShare();
     };
-    // Close on backdrop click
     this.shareModalEl.addEventListener("click", (e) => {
       if (e.target === this.shareModalEl) this._closeShareModal();
     });
@@ -376,7 +380,6 @@ class ProjectTree {
 
     if (result.ok) {
       this._setShareFeedback(`✓ Shared successfully with ${email}`, true);
-      // Keep modal open with success so user can share to more people if needed
       this.shareSendEl.disabled = false;
       this.shareEmailEl.value = "";
     } else {
@@ -452,7 +455,6 @@ class ProjectTree {
     this._updateProgress();
   }
 
-  // isRoot flag controls whether to render the 🔗 share button
   _appendNode(parentUl, project, inheritedColor, isRoot = false) {
     const color = inheritedColor ?? colorFromString(project.name);
     const li = this._createLi(project, color, isRoot);
@@ -479,7 +481,9 @@ class ProjectTree {
     li.dataset.hash = project.hash ?? randomHash();
     li.dataset.description = JSON.stringify(project.description ?? "");
     li.dataset.footer = JSON.stringify(project.footer ?? "");
-    li.dataset.slideRefs = JSON.stringify(project.slideRefs ?? null);
+    // Store the slides object (new shape: { slides: [...] }) as JSON in dataset.
+    // Falls back gracefully for legacy bare slideRefs arrays.
+    li.dataset.references = JSON.stringify(project.references ?? null);
 
     const item = document.createElement("div");
     item.className = "item";
@@ -536,7 +540,6 @@ class ProjectTree {
       shareBtn.title = "Share with another user";
       shareBtn.onclick = (e) => {
         e.stopPropagation();
-        // Capture current project data from the DOM at click time
         const proj = this._extractSingleLi(li);
         this._openShareModal(proj);
       };
@@ -592,15 +595,15 @@ class ProjectTree {
     const hash = li.dataset.hash || randomHash();
     const description = JSON.parse(li.dataset.description || '""');
     const footer = JSON.parse(li.dataset.footer || '""');
-    const rawSR = li.dataset.slideRefs;
-    const slideRefs =
-      rawSR && rawSR !== "null" && rawSR !== "undefined"
-        ? JSON.parse(rawSR)
+    const rawSlides = li.dataset.references;
+    const slides =
+      rawSlides && rawSlides !== "null" && rawSlides !== "undefined"
+        ? JSON.parse(rawSlides)
         : undefined;
     const subUl = li.querySelector(":scope > ul");
     const children = subUl ? this._extractProjects(subUl) : [];
     const result = { name, completed, hash, description, footer, children };
-    if (slideRefs !== undefined) result.slideRefs = slideRefs;
+    if (slides !== undefined) result.references = slides;
     return result;
   }
 
@@ -645,7 +648,6 @@ class ProjectTree {
     }
     const name = this._uniqueName(ul, "New item");
     const hash = randomHash();
-    // Children are never root, so isRoot = false
     const li = this._createLi(
       {
         name,
@@ -762,15 +764,16 @@ class ProjectTree {
         const hash = li.dataset.hash || randomHash();
         const description = JSON.parse(li.dataset.description || '""');
         const footer = JSON.parse(li.dataset.footer || '""');
-        const rawSR = li.dataset.slideRefs;
-        const slideRefs =
-          rawSR && rawSR !== "null" && rawSR !== "undefined"
-            ? JSON.parse(rawSR)
+        // Round-trip the slides object opaquely
+        const rawSlides = li.dataset.references;
+        const slides =
+          rawSlides && rawSlides !== "null" && rawSlides !== "undefined"
+            ? JSON.parse(rawSlides)
             : undefined;
         const subUl = li.querySelector(":scope > ul");
         const children = subUl ? this._extractProjects(subUl) : [];
         const result = { name, completed, hash, description, footer, children };
-        if (slideRefs !== undefined) result.slideRefs = slideRefs;
+        if (slides !== undefined) result.references = slides;
         return result;
       })
       .filter(Boolean);
@@ -1027,7 +1030,6 @@ export default async function AppBody() {
     if (!document.contains(ShadowRoot.host)) {
       console.log("doesnt contain");
       observer.disconnect();
-      
       Registry.app_terminate(APP_ID);
     }
   });

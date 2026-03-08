@@ -6,11 +6,16 @@
 //
 // ── Supported call types ─────────────────────────────────────────────────────
 //
-//   frac_set   { ref, body }   → {}
+//   frac_set   { ref, body }          → {}
 //     Writes body keys under data/{ref}/ and records refs in users/{uid}/dataRefs/
 //
-//   frac_get   { id, ref }     → { id, body }
+//   frac_get   { id, ref }            → { id, body }
 //     Reads users/{uid}/dataRefs/{ref} first, then fetches only allowed children
+//
+//   frac_get_by_keys  { ref, keys }   → { body }
+//     Fetches specific child keys directly from data/{ref}/ without consulting
+//     dataRefs. Used by SlideShowHandler to load slides referenced in a project
+//     the caller already has legitimate read access to.
 //
 // ─────────────────────────────────────────────────────────────────────────────
 import { Registry } from "../../WebAppPlatform-main.js";
@@ -112,16 +117,18 @@ async function FracRequestHandler(callerApp, callBody) {
       }
 
       // 2. Update dataRefs index for this user
-      if (pathParts.length === 1) {
-        // Level-1 ref: replace the dataRefs node with exactly the new keys
-        const newRefs = Object.fromEntries(
-          Object.keys(body).map((k) => [k, true])
-        );
-        await dbSet(`users/${uid}/dataRefs/${pathParts[0]}`, newRefs);
-      } else {
-        // Level-2+ ref: just mark the level-2 path as accessible
-        const level2Path = `${pathParts[0]}/${pathParts[1]}`;
-        await dbSet(`users/${uid}/dataRefs/${level2Path}`, true);
+      if (!callBody.meta?.skipDataRefs) {
+        if (pathParts.length === 1) {
+          // Level-1 ref: replace the dataRefs node with exactly the new keys
+          const newRefs = Object.fromEntries(
+            Object.keys(body).map((k) => [k, true])
+          );
+          await dbSet(`users/${uid}/dataRefs/${pathParts[0]}`, newRefs);
+        } else {
+          // Level-2+ ref: just mark the level-2 path as accessible
+          const level2Path = `${pathParts[0]}/${pathParts[1]}`;
+          await dbSet(`users/${uid}/dataRefs/${level2Path}`, true);
+        }
       }
 
       pushLog({
@@ -203,6 +210,46 @@ async function FracRequestHandler(callerApp, callBody) {
     }
   }
 
+  // ── frac_get_by_keys ────────────────────────────────────────────────────────
+  // Fetches a specific set of child keys directly from data/{ref}/ without
+  // consulting dataRefs. The caller is trusted to only request keys it has
+  // already encountered through a legitimately authorized project read.
+  if (type === "frac_get_by_keys") {
+    const { ref: rawRef, keys } = callBody;
+
+    if (!rawRef || typeof rawRef !== "string") {
+      return { type: "error", status: "Missing or invalid 'ref'." };
+    }
+    if (!Array.isArray(keys)) {
+      return { type: "error", status: "'keys' must be an array." };
+    }
+    if (keys.length === 0) {
+      return { type: "success", status: "", body: {} };
+    }
+
+    const ref = normalizeRef(rawRef);
+
+    try {
+      const fetched = await Promise.all(
+        keys.map(async (k) => {
+          const val = await dbGetAll(`data/${ref}/${k}`);
+          return [k, val];
+        })
+      );
+
+      const result = {};
+      for (const [k, v] of fetched) {
+        if (v !== null && v !== undefined) result[k] = v;
+      }
+
+      pushLog({ op: "GET_KEYS", ref, keys, ok: true });
+      return { type: "success", status: "", body: result };
+    } catch (e) {
+      pushLog({ op: "GET_KEYS", ref, keys, ok: false, error: e.message });
+      return { type: "error", status: e.message };
+    }
+  }
+
   return { type: "error", status: `Unknown call type: '${type}'` };
 }
 
@@ -246,7 +293,7 @@ const VIEWER_STYLES = `
   }
   .log-row {
     display: grid;
-    grid-template-columns: 56px 36px 1fr auto;
+    grid-template-columns: 56px 64px 1fr auto;
     gap: 8px; align-items: baseline;
     padding: 5px 14px;
     border-bottom: 1px solid rgba(255,255,255,0.03);
@@ -258,6 +305,7 @@ const VIEWER_STYLES = `
   .op { font-weight: 500; font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; }
   .op.SET { color: var(--accent); }
   .op.GET { color: var(--green); }
+  .op.GET_KEYS { color: #fb923c; }
   .ref { color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .detail { font-size: 10px; color: var(--muted); white-space: nowrap; }
   .detail.ok { color: var(--green); }

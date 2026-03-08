@@ -484,7 +484,7 @@ async function openAuthViewerWindow() {
     "Firebase",
     {
       type: "division_create",
-      options: { title: "User Profile", icon: "👤", width: 380, height: 370 },
+      options: { title: "User Profile", icon: "👤", width: 380, height: 410 },
     },
   );
   if (winResult.type !== "success") {
