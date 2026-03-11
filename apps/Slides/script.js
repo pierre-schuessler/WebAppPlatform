@@ -1016,7 +1016,8 @@ class SlideShowHandler {
   }
 
   _showTypeDialog(target) {
-    document.querySelector(".type-dialog")?.remove();
+    // ── FIXED: remove from shadow, not document ──
+    this.shadow.querySelector(".type-dialog")?.remove();
     const slide = this.slides[this.activeIndex];
 
     const dialog = document.createElement("div");
@@ -1030,6 +1031,8 @@ class SlideShowHandler {
             `<label><input type="radio" name="t" value="${k}"${k === slide.type ? " checked" : ""}> ${k}</label>`,
         )
         .join("");
+
+    // ── FIXED: append to shadow root so styles apply ──
     this.shadow.appendChild(dialog);
 
     const position = () => {
@@ -1048,13 +1051,15 @@ class SlideShowHandler {
     const destroy = () => {
       if (destroyed) return;
       destroyed = true;
-      document.removeEventListener("pointerdown", onDown, true);
+      // ── FIXED: remove listener from shadow ──
+      this.shadow.removeEventListener("pointerdown", onDown, true);
       dialog.remove();
     };
     const onDown = (e) => {
       if (!e.composedPath().includes(dialog)) destroy();
     };
-    document.addEventListener("pointerdown", onDown, true);
+    // ── FIXED: listen on shadow, not document ──
+    this.shadow.addEventListener("pointerdown", onDown, true);
 
     dialog.addEventListener("change", (e) => {
       if (e.target.name !== "t") return;
@@ -1070,7 +1075,8 @@ class SlideShowHandler {
   }
 
   _showEditModal(slide, handler) {
-    document.getElementById("_ssh-edit-overlay")?.remove();
+    // ── FIXED: query and append within shadow root ──
+    this.shadow.querySelector("#_ssh-edit-overlay")?.remove();
     const overlay = document.createElement("div");
     overlay.id = "_ssh-edit-overlay";
     overlay.className = "edit-modal-overlay";
@@ -1085,6 +1091,8 @@ class SlideShowHandler {
       <div class="edit-modal-body" id="_ssh-edit-body"></div>
     `;
     overlay.appendChild(modal);
+
+    // ── FIXED: append to shadow root so styles apply ──
     this.shadow.appendChild(overlay);
 
     handler.editModal(
@@ -1099,12 +1107,16 @@ class SlideShowHandler {
     overlay.addEventListener("pointerdown", (e) => {
       if (e.target === overlay) close();
     });
-    document.addEventListener("keydown", function onKey(e) {
+
+    // ── FIXED: listen on shadow for Escape, capture reference for cleanup ──
+    const shadow = this.shadow;
+    const onKey = (e) => {
       if (e.key === "Escape") {
         close();
-        document.removeEventListener("keydown", onKey);
+        shadow.removeEventListener("keydown", onKey);
       }
-    });
+    };
+    shadow.addEventListener("keydown", onKey);
   }
 
   // ── Scaling ────────────────────────────────────────────────────────────────
@@ -1157,7 +1169,7 @@ class SlideShowHandler {
         opacity: "0.8",
         width: thumb.offsetWidth + "px",
       });
-      this.shadow.appendChild(clone);
+      document.body.appendChild(clone);
       e.dataTransfer.setDragImage(clone, e.offsetX, e.offsetY);
       setTimeout(() => clone.remove(), 0);
 
