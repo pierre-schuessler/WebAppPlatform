@@ -1030,7 +1030,7 @@ class SlideShowHandler {
             `<label><input type="radio" name="t" value="${k}"${k === slide.type ? " checked" : ""}> ${k}</label>`,
         )
         .join("");
-    document.body.appendChild(dialog);
+    this.shadow.appendChild(dialog);
 
     const position = () => {
       const t = target.getBoundingClientRect();
@@ -1085,7 +1085,7 @@ class SlideShowHandler {
       <div class="edit-modal-body" id="_ssh-edit-body"></div>
     `;
     overlay.appendChild(modal);
-    document.body.appendChild(overlay);
+    this.shadow.appendChild(overlay);
 
     handler.editModal(
       modal.querySelector("#_ssh-edit-body"),
@@ -1157,7 +1157,7 @@ class SlideShowHandler {
         opacity: "0.8",
         width: thumb.offsetWidth + "px",
       });
-      document.body.appendChild(clone);
+      this.shadow.appendChild(clone);
       e.dataTransfer.setDragImage(clone, e.offsetX, e.offsetY);
       setTimeout(() => clone.remove(), 0);
 
