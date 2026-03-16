@@ -314,10 +314,6 @@ async function fracGet(ref) {
 
 async function fracSet(ref, body, meta = {}) {
   console.log("Setting: ", ref);
-  let meta = meta;
-  
-
-
   const res = await Registry.responsibility_call("dbuserfractioning", APP_ID, {
     type: "frac_set",
     ref,
