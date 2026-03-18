@@ -3,25 +3,25 @@
 In-process app and capability management for JavaScript. Add one script tag — autostart handles the rest.
 
 ```html
-<script type="module" src="WebAppPlatform-main.js"></script>
+<script type="module" src="registry.js"></script>
 ```
 
 Registry loads `autostart.json` and boots each listed app. Apps register responsibilities, call each other, and manage their own lifecycle from there.
 
 ```json
 [
-  { "name": "Firebase", "src": "./apps/firebase/script.js" },
-  { "name": "UI",      "src": "example.com/script.js"      }
+  { "name": "Storage", "src": "./apps/Firebase/script.js" },
+  { "name": "UI",      "src": "./apps/ui.js"      }
 ]
 ```
 
 ```js
-// apps/storage.js
-import { Registry } from '../registry.js';
+// apps/Firebase/script.js
+import { Registry } from '../../registry.js';
 
 export default async function () {
-  Registry.responsibility_create('storage:read', 'Storage', async (caller, { key }) => {
-    return localStorage.getItem(key);
+  Registry.responsibility_create('Database', 'Firebase', async (caller, body) => {
+    // handle get, set, subscribe, etc.
   });
 }
 ```
@@ -69,9 +69,9 @@ All methods return `{ type: 'success' }` or `{ type: 'error', status }`.
 
 **Wait for a dependency** — apps start concurrently, so don't assume load order:
 ```js
-const cancel = Registry.responsibility_on_available('storage:read', () => {
+const cancel = Registry.responsibility_on_available('Database', () => {
   cancel();
-  Registry.responsibility_call('storage:read', 'MyApp', { key: 'config' });
+  Registry.responsibility_call('Database', 'MyApp', { type: 'db_get', path: 'config' });
 });
 ```
 
