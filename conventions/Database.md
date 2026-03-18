@@ -1,5 +1,6 @@
 # Database
 
+This responsibility handles saving and loading data from a database of some kind.
 All paths are relative — the app prepends the platform namespace internally.
 
 ---
