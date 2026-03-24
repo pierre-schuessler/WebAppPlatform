@@ -342,31 +342,14 @@ async function fracGetSlidesByKeys(keys) {
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  Load: project node → flat slide array
-//
-//  Project node shape (written by ProjectManager):
-//    { name, footer, description,
-//      slides: { slides: ["sh_aaa", "sh_bbb"] },   ← refs wrapped in object
-//      children: [ ...same shape... ] }
-//
-//  We collect all unique slide hashes from the tree, fetch them directly
-//  from the "slides" partition by key, then flatten into display order.
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function loadSlidesForProject(projectHash, allProjectsOptional = null) {
-  // 1. Fetch the full project tree from "projects" (or use provided data)
   const allProjects = allProjectsOptional ?? (await fracGet("projects"));
-
-  // Navigate to the node at projectHash
   const projectNode = resolveProjectNode(allProjects, projectHash);
   if (!projectNode) throw new Error(`Project node not found: ${projectHash}`);
-
-  // 2. Collect all unique slide hashes referenced in this subtree
   const allRefs = collectSlideRefs(projectNode);
-
-  // 3. Fetch slides directly by their keys (bypasses dataRefs gate)
   const slidesPartition = await fracGetSlidesByKeys(allRefs);
-
-  // 4. Flatten the project tree into a display slide array
   return flattenProject(projectNode, slidesPartition, 0, "");
 }
 
@@ -389,13 +372,10 @@ function resolveProjectNode(allProjects, projectHash) {
   return node;
 }
 
-// Reads slide refs from the new { slides: { slides: [...] } } shape,
-// with fallback to the legacy bare array for backwards compatibility.
 function getSlideRefsFromNode(node) {
   if (node.references && Array.isArray(node.references.slides)) {
     return node.references.slides;
   }
-  // Legacy fallback: bare slideRefs array
   if (Array.isArray(node.slideRefs) || (node.slides && Array.isArray(node.slides.slides))) {
     return node.slideRefs || node.slides?.slides || [];
   }
@@ -414,7 +394,6 @@ function collectSlideRefs(node) {
 function flattenProject(node, slidesPartition, depth, prefix) {
   const result = [];
 
-  // Title slide for this node
   result.push({
     hash: node.hash || null,
     type: "title",
@@ -424,7 +403,6 @@ function flattenProject(node, slidesPartition, depth, prefix) {
     ...SlideTypeRegistry.get("title").deserialize(node),
   });
 
-  // Content slides for this node
   getSlideRefsFromNode(node).forEach((slideHash) => {
     const raw = slidesPartition[slideHash];
     if (!raw) return;
@@ -439,7 +417,6 @@ function flattenProject(node, slidesPartition, depth, prefix) {
     });
   });
 
-  // Recurse into children
   (node.children || []).forEach((child, idx) => {
     const nextPrefix = prefix ? `${prefix}${idx + 1}.` : `${idx + 1}.`;
     result.push(
@@ -451,22 +428,16 @@ function flattenProject(node, slidesPartition, depth, prefix) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  Save: flat slide array → upsert changed slides + update project slides refs
-//
-//  We ONLY touch the "slides" partition — we never rewrite the project tree.
-//  For project nodes we update references.slides (the new shape) at each level.
+//  Save
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function saveSlides(flatSlides, projectHash) {
-  // 1. Separate title slides from content slides
   const contentSlides = flatSlides.filter((s) => s.type !== "title");
 
-  // 2. Ensure every content slide has a stable hash
   contentSlides.forEach((s) => {
     if (!s.slideHash) s.slideHash = slideHash();
   });
 
-  // 3. Write all changed slides to "slides" partition
   const slidesBody = {};
   contentSlides.forEach((s) => {
     const handler =
@@ -485,7 +456,6 @@ async function saveSlides(flatSlides, projectHash) {
     await fracSet("slides", slidesBody, { skipDataRefs: true });
   }
 
-  // 4. Rebuild references.slides on the project node(s)
   await patchProjectSlideRefs(flatSlides, projectHash);
 }
 
@@ -496,7 +466,6 @@ async function patchProjectSlideRefs(flatSlides, projectHash) {
 
   const stack = [{ node: rootNode, depth: -1 }];
 
-  // Reset all slide ref arrays in this subtree
   clearSlideRefs(rootNode);
 
   flatSlides.forEach((slide) => {
@@ -516,18 +485,15 @@ async function patchProjectSlideRefs(flatSlides, projectHash) {
       }
 
       if (matchNode) {
-        // Ensure the new shape exists
         if (!matchNode.references || typeof matchNode.references !== "object") {
           matchNode.references = { slides: [] };
         }
         matchNode.references.slides = [];
-        // Persist title slide edits back to the node
         matchNode.description = slide.data || "";
         matchNode.footer = slide.footer || "";
         stack.push({ node: matchNode, depth: slide.depth });
       }
     } else {
-      // Content slide — attach ref to current top of stack
       const top = stack[stack.length - 1].node;
       if (!top.references || typeof top.references !== "object") {
         top.references = { slides: [] };
@@ -536,14 +502,12 @@ async function patchProjectSlideRefs(flatSlides, projectHash) {
     }
   });
 
-  // Write back only the root hash key in the projects partition
   const rootHash = projectHash.split("/")[0];
   const projectBody = { [rootHash]: allProjects[rootHash] };
   await fracSet("projects", projectBody, {"dontDelete": true});
 }
 
 function clearSlideRefs(node) {
-  // Always write the new shape; drop legacy slideRefs if present
   node.references = { slides: [] };
   delete node.slideRefs;
   delete node.slides;
@@ -611,6 +575,19 @@ const STYLES = `
   .icon-btn:hover { background: rgba(167,139,250,0.14); border-color: rgba(167,139,250,0.4); }
   .icon-btn.danger:hover { background: rgba(248,113,113,0.12); border-color: rgba(248,113,113,0.35); }
   .icon-btn[hidden] { display: none !important; }
+
+  /* ── Present button ── */
+  .icon-btn.present-btn {
+    background: rgba(52,211,153,0.08);
+    border-color: rgba(52,211,153,0.28);
+    color: var(--accent2);
+    font-size: 11px; width: auto; padding: 0 10px; gap: 5px;
+    font-weight: 500; letter-spacing: 0.01em;
+  }
+  .icon-btn.present-btn:hover {
+    background: rgba(52,211,153,0.18);
+    border-color: rgba(52,211,153,0.55);
+  }
 
   /* ── Main layout ── */
   .presentation {
@@ -766,6 +743,59 @@ const STYLES = `
     font-family: var(--mono); font-size: 12px; outline: none;
   }
   .edit-modal-input:focus { border-color: rgba(167,139,250,0.5); }
+
+  /* ── Presentation mode ── */
+  .present-overlay {
+    position: fixed; inset: 0; z-index: 99999;
+    background: #000;
+    display: flex; align-items: center; justify-content: center;
+    outline: none;
+  }
+  .present-stage {
+    width: 1600px; height: 900px;
+    transform-origin: center center;
+    position: relative;
+    pointer-events: none;
+    user-select: none;
+    flex-shrink: 0;
+  }
+  .present-stage .slide [contenteditable] {
+    pointer-events: none !important;
+    user-select: none !important;
+    outline: none !important;
+    cursor: default !important;
+  }
+  .present-nav-hint {
+    position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+    font-family: var(--mono); font-size: 11px; color: rgba(255,255,255,0.25);
+    letter-spacing: 0.09em; white-space: nowrap;
+    pointer-events: none;
+    transition: opacity 1s ease;
+  }
+  .present-counter {
+    position: absolute; top: 14px; right: 20px;
+    font-family: var(--mono); font-size: 11px; color: rgba(255,255,255,0.22);
+    letter-spacing: 0.06em;
+    pointer-events: none;
+  }
+  .present-arrow {
+    position: absolute; top: 50%; transform: translateY(-50%);
+    width: 48px; height: 48px;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; color: rgba(255,255,255,0.45); font-size: 20px;
+    transition: background 0.15s, color 0.15s, opacity 0.2s;
+    opacity: 0;
+    pointer-events: auto;
+    font-family: inherit;
+  }
+  .present-arrow:hover { background: rgba(255,255,255,0.14); color: #fff; }
+  .present-arrow.left  { left: 20px; }
+  .present-arrow.right { right: 20px; }
+  .present-overlay:hover .present-arrow:not([hidden]) { opacity: 1; }
+  .present-arrow[hidden] { display: none !important; }
 `;
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -784,6 +814,17 @@ class SlideShowHandler {
     this.currentDropIndex = null;
     this.autoScrollInterval = null;
     this.resizeObserver = null;
+
+    // Presentation mode state
+    this._presentIndex = 0;
+    this._presentOverlay = null;
+    this._presentStage = null;
+    this._presentCounter = null;
+    this._presentBtnLeft = null;
+    this._presentBtnRight = null;
+    this._presentKeyHandler = null;
+    this._presentDocKeyHandler = null;
+    this._presentResizeHandler = null;
   }
 
   // ── Mount DOM ──────────────────────────────────────────────────────────────
@@ -794,6 +835,7 @@ class SlideShowHandler {
         <span class="header-title">🎞 SlideShow</span>
         <span class="project-badge" id="project-badge">No project loaded</span>
         <button class="icon-btn" id="btn-reload" title="Reload from database">↺</button>
+        <button class="icon-btn present-btn" id="btn-present" title="Present slideshow (F5)">▶ Present</button>
       </div>
       <div class="presentation">
         <div class="left-panel">
@@ -952,6 +994,12 @@ class SlideShowHandler {
       await this.loadProject(this.activeProjectHash, this.activeProjectName);
     };
 
+    // Present
+    this.el.querySelector("#btn-present").onclick = () => {
+      if (this.slides.length === 0) return;
+      this._enterPresentation(this.activeIndex);
+    };
+
     // Add slide
     this.el.querySelector("#btn-add").onclick = () => {
       if (!this.activeProjectHash) return;
@@ -994,7 +1042,6 @@ class SlideShowHandler {
   }
 
   _showTypeDialog(target) {
-    // ── FIXED: remove from shadow, not document ──
     this.shadow.querySelector(".type-dialog")?.remove();
     const slide = this.slides[this.activeIndex];
 
@@ -1010,7 +1057,6 @@ class SlideShowHandler {
         )
         .join("");
 
-    // ── FIXED: append to shadow root so styles apply ──
     this.shadow.appendChild(dialog);
 
     const position = () => {
@@ -1029,14 +1075,12 @@ class SlideShowHandler {
     const destroy = () => {
       if (destroyed) return;
       destroyed = true;
-      // ── FIXED: remove listener from shadow ──
       this.shadow.removeEventListener("pointerdown", onDown, true);
       dialog.remove();
     };
     const onDown = (e) => {
       if (!e.composedPath().includes(dialog)) destroy();
     };
-    // ── FIXED: listen on shadow, not document ──
     this.shadow.addEventListener("pointerdown", onDown, true);
 
     dialog.addEventListener("change", (e) => {
@@ -1053,7 +1097,6 @@ class SlideShowHandler {
   }
 
   _showEditModal(slide, handler) {
-    // ── FIXED: query and append within shadow root ──
     this.shadow.querySelector("#_ssh-edit-overlay")?.remove();
     const overlay = document.createElement("div");
     overlay.id = "_ssh-edit-overlay";
@@ -1070,7 +1113,6 @@ class SlideShowHandler {
     `;
     overlay.appendChild(modal);
 
-    // ── FIXED: append to shadow root so styles apply ──
     this.shadow.appendChild(overlay);
 
     handler.editModal(
@@ -1086,7 +1128,6 @@ class SlideShowHandler {
       if (e.target === overlay) close();
     });
 
-    // ── FIXED: listen on shadow for Escape, capture reference for cleanup ──
     const shadow = this.shadow;
     const onKey = (e) => {
       if (e.key === "Escape") {
@@ -1095,6 +1136,153 @@ class SlideShowHandler {
       }
     };
     shadow.addEventListener("keydown", onKey);
+  }
+
+  // ── Presentation mode ──────────────────────────────────────────────────────
+
+  _enterPresentation(startIndex = 0) {
+    // Remove any existing overlay
+    this.shadow.querySelector("#_present-overlay")?.remove();
+
+    this._presentIndex = Math.max(0, Math.min(this.slides.length - 1, startIndex));
+
+    const overlay = document.createElement("div");
+    overlay.className = "present-overlay";
+    overlay.id = "_present-overlay";
+    overlay.tabIndex = 0;
+
+    // Slide counter (top-right)
+    const counter = document.createElement("div");
+    counter.className = "present-counter";
+    overlay.appendChild(counter);
+
+    // The scaled slide stage
+    const stage = document.createElement("div");
+    stage.className = "present-stage";
+    overlay.appendChild(stage);
+
+    // Keyboard hint (fades out)
+    const hint = document.createElement("div");
+    hint.className = "present-nav-hint";
+    hint.textContent = "← → to navigate  ·  Esc to exit";
+    overlay.appendChild(hint);
+
+    // Prev / next arrow buttons
+    const btnLeft = document.createElement("button");
+    btnLeft.className = "present-arrow left";
+    btnLeft.innerHTML = "&#8249;";
+    btnLeft.onclick = () => this._showPresentSlide(this._presentIndex - 1);
+    overlay.appendChild(btnLeft);
+
+    const btnRight = document.createElement("button");
+    btnRight.className = "present-arrow right";
+    btnRight.innerHTML = "&#8250;";
+    btnRight.onclick = () => this._showPresentSlide(this._presentIndex + 1);
+    overlay.appendChild(btnRight);
+
+    this.shadow.appendChild(overlay);
+
+    // Store refs
+    this._presentOverlay = overlay;
+    this._presentStage = stage;
+    this._presentCounter = counter;
+    this._presentBtnLeft = btnLeft;
+    this._presentBtnRight = btnRight;
+
+    // Keyboard handler (arrow keys + escape)
+    this._presentKeyHandler = (e) => {
+      if (e.key === "ArrowRight" || e.key === "ArrowDown") {
+        e.preventDefault();
+        e.stopPropagation();
+        this._showPresentSlide(this._presentIndex + 1);
+      } else if (e.key === "ArrowLeft" || e.key === "ArrowUp") {
+        e.preventDefault();
+        e.stopPropagation();
+        this._showPresentSlide(this._presentIndex - 1);
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopPropagation();
+        this._exitPresentation();
+      }
+    };
+
+    // Listen on both shadow and document to ensure we catch the events
+    this.shadow.addEventListener("keydown", this._presentKeyHandler, true);
+    document.addEventListener("keydown", this._presentKeyHandler, true);
+    this._presentDocKeyHandler = this._presentKeyHandler;
+
+    // Resize handler to keep slide scaled correctly
+    this._presentResizeHandler = () => {
+      const s = Math.min(window.innerWidth / 1600, window.innerHeight / 900);
+      stage.style.transform = `scale(${s})`;
+    };
+    window.addEventListener("resize", this._presentResizeHandler);
+
+    // Initial scale
+    const scale = Math.min(window.innerWidth / 1600, window.innerHeight / 900);
+    stage.style.transform = `scale(${scale})`;
+
+    // Render first slide
+    this._showPresentSlide(this._presentIndex);
+
+    // Focus overlay so keyboard events fire immediately
+    overlay.focus();
+
+    // Fade out the hint after 3s
+    setTimeout(() => { hint.style.opacity = "0"; }, 3000);
+  }
+
+  _exitPresentation() {
+    if (!this._presentOverlay) return;
+    this._presentOverlay.remove();
+    this._presentOverlay = null;
+    this._presentStage = null;
+    this._presentCounter = null;
+    this._presentBtnLeft = null;
+    this._presentBtnRight = null;
+
+    this.shadow.removeEventListener("keydown", this._presentKeyHandler, true);
+    document.removeEventListener("keydown", this._presentDocKeyHandler, true);
+    window.removeEventListener("resize", this._presentResizeHandler);
+
+    this._presentKeyHandler = null;
+    this._presentDocKeyHandler = null;
+    this._presentResizeHandler = null;
+  }
+
+  _showPresentSlide(index) {
+    const total = this.slides.length;
+    if (total === 0) return;
+    index = Math.max(0, Math.min(total - 1, index));
+    this._presentIndex = index;
+
+    // Build slide element
+    const slide = this.slides[index];
+    const slideEl = this._createSlideEl(slide);
+
+    // Disable all contenteditable so nothing is accidentally edited
+    slideEl.querySelectorAll("[contenteditable]").forEach((el) => {
+      el.contentEditable = "false";
+    });
+
+    this._presentStage.innerHTML = "";
+    this._presentStage.appendChild(slideEl);
+
+    // Update counter
+    this._presentCounter.textContent = `${index + 1} / ${total}`;
+
+    // Show/hide nav arrows
+    this._presentBtnLeft.hidden = index === 0;
+    this._presentBtnRight.hidden = index === total - 1;
+
+    // Sync active index back to the editor thumbnail strip
+    this.activeIndex = index;
+    this.thumbnailsEl.querySelectorAll(".thumbnail").forEach((t, i) => {
+      t.classList.toggle("active", i === index);
+    });
+    // Scroll the active thumbnail into view
+    const activeThumb = this.thumbnailsEl.querySelectorAll(".thumbnail")[index];
+    activeThumb?.scrollIntoView({ block: "nearest", behavior: "smooth" });
   }
 
   // ── Scaling ────────────────────────────────────────────────────────────────
