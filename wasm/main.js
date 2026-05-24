@@ -21,7 +21,7 @@ async function main(hexString = "") {
         write_html: (index, DomUID) => {
             if (!exportedMemory) {
                 console.error("Memory not initialized yet.");
-                return;
+                return 1;
             }
 
             const memoryView = new Uint8Array(exportedMemory.buffer, index);
@@ -36,6 +36,7 @@ async function main(hexString = "") {
             const htmlString = decoder.decode(stringBytes);
 
             getElementByUID(DomUID).innerHTML = htmlString;
+            return 0;
         },
         get_nth_child_DomUID: (DomUID, n) => {
             const parent = getElementByUID(DomUID);
