@@ -1,20 +1,41 @@
 async function main(hexString = "") {
-    let env = {
+    let exportedMemory;
+
+    const env = {
+        writehtml: (index) => {
+            if (!exportedMemory) {
+                console.error("Memory not initialized yet.");
+                return;
+            }
+
+            const memoryView = new Uint8Array(exportedMemory.buffer, index);
+            
+            let length = 0;
+            while (memoryView[length] !== 0) {
+                length++;
+            }
+
+            const stringBytes = memoryView.subarray(0, length);
+            const decoder = new TextDecoder('utf-8');
+            const htmlString = decoder.decode(stringBytes);
+
+            document.body.innerHTML = htmlString;
+        }
     };
 
     try {
-        if (hexString == ""){
+        if (hexString === "") {
             const response = await fetch("./program");
             hexString = await response.text();
         }
-        
 
         const wasmBytes = new Uint8Array(
-            hexString.split(' ').map(byte => parseInt(byte, 16))
+            hexString.trim().split(' ').map(byte => parseInt(byte, 16))
         );
 
         const { instance } = await WebAssembly.instantiate(wasmBytes, { env });
             
+        exportedMemory = instance.exports.memory;
         const entryPoint = instance.exports.main || instance.exports._start;
 
         if (typeof entryPoint === 'function') {
@@ -32,4 +53,4 @@ async function main(hexString = "") {
 
 main();
 
-console.main = main;
+window.main = main;
