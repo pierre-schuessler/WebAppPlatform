@@ -49,6 +49,26 @@ async function main(hexString = "") {
             }
             
             return getDomUID(children[n]);
+        },
+        run : (index, length) => {
+            if (!exportedMemory) {
+                console.error("Memory not initialized yet.");
+                return 1;
+            }
+
+            const memoryView = new Uint8Array(exportedMemory.buffer, index, length);
+            
+            const hexArray = Array.from(memoryView).map(byte => 
+                byte.toString(16).padStart(2, '0')
+            );
+            const newHexString = hexArray.join(' ');
+
+            main(newHexString).catch(err => {
+                console.error("Nested main execution failed:", err);
+            });
+
+            return 0;
+            
         }
     };
 
