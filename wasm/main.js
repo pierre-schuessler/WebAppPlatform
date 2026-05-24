@@ -1,10 +1,13 @@
-async function main() {
+async function main(hexString = "") {
     let env = {
     };
 
     try {
-        const response = await fetch("./program");
-        const hexString = await response.text();
+        if (!hexString){
+            const response = await fetch("./program");
+            const hexString = await response.text();
+        }
+        
 
         const wasmBytes = new Uint8Array(
             hexString.split(' ').map(byte => parseInt(byte, 16))
@@ -28,3 +31,5 @@ async function main() {
 }
 
 main();
+
+console.main = main;
