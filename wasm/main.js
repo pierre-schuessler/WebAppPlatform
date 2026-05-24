@@ -77,6 +77,7 @@ async function main(hexString = "") {
             const response = await fetch("./program");
             hexString = await response.text();
         }
+        console.log("Running program: ", hexString);
 
         const wasmBytes = new Uint8Array(
             hexString.trim().split(' ').map(byte => parseInt(byte, 16))
