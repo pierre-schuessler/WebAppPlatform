@@ -36,7 +36,7 @@ async function main(hexString = "") {
         const { instance } = await WebAssembly.instantiate(wasmBytes, { env });
             
         exportedMemory = instance.exports.memory;
-        console.log(exportedMemory)
+        console.log(instance)
         const entryPoint = instance.exports.main || instance.exports._start;
 
         if (typeof entryPoint === 'function') {
