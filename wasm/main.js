@@ -3,7 +3,7 @@ async function main(hexString = "") {
     };
 
     try {
-        if (!hexString){
+        if (hexString != ""){
             const response = await fetch("./program");
             const hexString = await response.text();
         }
