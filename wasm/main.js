@@ -1,8 +1,24 @@
+let currentId = 1;
+
+function getDomUID(element) {
+  if (!element.dataset.uid) {
+    element.dataset.uid = ++currentId;
+  }
+  
+  return parseInt(element.dataset.uid, 10);
+}
+
+function getElementByUID(uid) {
+  return document.querySelector(`[data-uid="${uid}"]`);
+}
+
+getDomUID(document.body);
+
 async function main(hexString = "") {
     let exportedMemory;
 
     const env = {
-        writehtml: (index) => {
+        write_html: (index, DomUID) => {
             if (!exportedMemory) {
                 console.error("Memory not initialized yet.");
                 return;
@@ -19,7 +35,19 @@ async function main(hexString = "") {
             const decoder = new TextDecoder('utf-8');
             const htmlString = decoder.decode(stringBytes);
 
-            document.body.innerHTML = htmlString;
+            getElementByUID(DomUID).innerHTML = htmlString;
+        },
+        get_nth_child_DomUID: (DomUID, n) => {
+            const parent = getElementByUID(DomUID);
+            if (!parent) return 0;
+
+            const children = parent.children;
+
+            if (n >= children.length || n < 0) {
+                return 0; 
+            }
+            
+            return getDomUID(children[n]);
         }
     };
 
